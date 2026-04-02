@@ -2,6 +2,23 @@
 # .git, .github, .claude, .agents, .idea, node_modules,
 # README.md, LICENSE.md, CHANGELOG.md, CONTRIBUTING.md
 
+# Repository-internal files that should not be published as docs pages.
+AGENTS.md
+LICENSE
+
+# Starter-kit demo content.
+ai-tools/
+api-reference/
+essentials/
+snippets/
+development.mdx
+quickstart.mdx
+
+# Demo media from the starter template.
+images/checks-passed.png
+images/hero-dark.png
+images/hero-light.png
+
 # Draft content
 drafts/
 *.draft.mdx
