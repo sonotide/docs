@@ -1,122 +1,247 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "theme": "sequoia",
+  "name": "Sonotide",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#6366f1",
+    "light": "#a5b4fc",
+    "dark": "#4f46e5"
   },
   "favicon": "/favicon.svg",
+  "fonts": {
+    "heading": {
+      "family": "Space Grotesk"
+    },
+    "body": {
+      "family": "IBM Plex Sans"
+    }
+  },
+  "styling": {
+    "eyebrows": "breadcrumbs"
+  },
   "navigation": {
-    "tabs": [
+    "languages": [
       {
-        "tab": "Guides",
-        "groups": [
+        "language": "en",
+        "navbar": {
+          "links": [
+            {
+              "label": "Framework repo",
+              "href": "https://github.com/sonotide/sonotide"
+            },
+            {
+              "label": "Docs repo",
+              "href": "https://github.com/sonotide/docs"
+            }
+          ],
+          "primary": {
+            "type": "button",
+            "label": "Quickstart",
+            "href": "/en/getting-started"
+          }
+        },
+        "footer": {
+          "socials": {
+            "github": "https://github.com/sonotide"
+          },
+          "links": [
+            {
+              "header": "Documentation",
+              "items": [
+                {
+                  "label": "Introduction",
+                  "href": "/en/index"
+                },
+                {
+                  "label": "Quickstart",
+                  "href": "/en/getting-started"
+                },
+                {
+                  "label": "API reference",
+                  "href": "/en/api"
+                }
+              ]
+            },
+            {
+              "header": "Repositories",
+              "items": [
+                {
+                  "label": "Framework source",
+                  "href": "https://github.com/sonotide/sonotide"
+                },
+                {
+                  "label": "Docs source",
+                  "href": "https://github.com/sonotide/docs"
+                }
+              ]
+            }
+          ]
+        },
+        "tabs": [
           {
-            "group": "Getting started",
-            "pages": [
-              "index",
-              "quickstart",
-              "development"
+            "tab": "Documentation",
+            "groups": [
+              {
+                "group": "Start here",
+                "pages": [
+                  "en/index",
+                  "en/getting-started",
+                  "en/build"
+                ]
+              },
+              {
+                "group": "Core concepts",
+                "pages": [
+                  "en/concepts",
+                  "en/architecture",
+                  "en/runtime",
+                  "en/streams",
+                  "en/playback",
+                  "en/equalizer"
+                ]
+              },
+              {
+                "group": "Migration and diagnostics",
+                "pages": [
+                  "en/migration",
+                  "en/troubleshooting"
+                ]
+              }
             ]
           },
           {
-            "group": "Customization",
-            "pages": [
-              "essentials/settings",
-              "essentials/navigation"
-            ]
-          },
-          {
-            "group": "Writing content",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+            "tab": "Reference",
+            "groups": [
+              {
+                "group": "API surface",
+                "pages": [
+                  "en/api"
+                ]
+              },
+              {
+                "group": "Examples",
+                "pages": [
+                  "en/examples"
+                ]
+              }
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
-        "groups": [
+        "language": "ru",
+        "navbar": {
+          "links": [
+            {
+              "label": "Репозиторий фреймворка",
+              "href": "https://github.com/sonotide/sonotide"
+            },
+            {
+              "label": "Репозиторий документации",
+              "href": "https://github.com/sonotide/docs"
+            }
+          ],
+          "primary": {
+            "type": "button",
+            "label": "Быстрый старт",
+            "href": "/ru/getting-started"
+          }
+        },
+        "footer": {
+          "socials": {
+            "github": "https://github.com/sonotide"
+          },
+          "links": [
+            {
+              "header": "Документация",
+              "items": [
+                {
+                  "label": "Введение",
+                  "href": "/ru/index"
+                },
+                {
+                  "label": "Быстрый старт",
+                  "href": "/ru/getting-started"
+                },
+                {
+                  "label": "Справка API",
+                  "href": "/ru/api"
+                }
+              ]
+            },
+            {
+              "header": "Репозитории",
+              "items": [
+                {
+                  "label": "Исходный код фреймворка",
+                  "href": "https://github.com/sonotide/sonotide"
+                },
+                {
+                  "label": "Исходный код документации",
+                  "href": "https://github.com/sonotide/docs"
+                }
+              ]
+            }
+          ]
+        },
+        "tabs": [
           {
-            "group": "API documentation",
-            "pages": [
-              "api-reference/introduction"
+            "tab": "Документация",
+            "groups": [
+              {
+                "group": "Сначала сюда",
+                "pages": [
+                  "ru/index",
+                  "ru/getting-started",
+                  "ru/build"
+                ]
+              },
+              {
+                "group": "Ключевые концепции",
+                "pages": [
+                  "ru/concepts",
+                  "ru/architecture",
+                  "ru/runtime",
+                  "ru/streams",
+                  "ru/playback",
+                  "ru/equalizer"
+                ]
+              },
+              {
+                "group": "Миграция и диагностика",
+                "pages": [
+                  "ru/migration",
+                  "ru/troubleshooting"
+                ]
+              }
             ]
           },
           {
-            "group": "Endpoint examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+            "tab": "Справка",
+            "groups": [
+              {
+                "group": "API",
+                "pages": [
+                  "ru/api"
+                ]
+              },
+              {
+                "group": "Примеры",
+                "pages": [
+                  "ru/examples"
+                ]
+              }
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
+    ]
   },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+  "errors": {
+    "404": {
+      "redirect": false,
+      "title": "Page not found / Страница не найдена",
+      "description": "Try the [English introduction](/en/index) or open the [Russian introduction](/ru/index). If you expected a different page, use search or return to the docs home."
     }
   }
 }
