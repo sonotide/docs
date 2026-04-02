@@ -1,0 +1,37 @@
+---
+title: "Troubleshooting"
+description: "Resolving common Sonotide setup, build, and runtime issues on Windows."
+---
+
+If things aren't working as expected, check the common pitfalls below.
+
+## Build Issues
+
+<AccordionGroup>
+  <Accordion title="CTest says a configuration is missing">
+    Ensure you are explicitly targeting the multi-config build tree and specifying the `Debug` (or `Release`) configuration.
+    
+    ```bash
+    ctest --preset msvc-x64-debug
+    # Or manually:
+    ctest --test-dir build/msvc-x64-debug -C Debug
+    ```
+  </Accordion>
+  <Accordion title="CMake is not in my PATH">
+    If Visual Studio is installed, CMake is already on your system but not necessarily added to the global `PATH`. Provide the full absolute path to the executable, or open the "Developer Command Prompt for VS 2022" where `cmake` is automatically linked.
+  </Accordion>
+</AccordionGroup>
+
+## Runtime Issues
+
+<AccordionGroup>
+  <Accordion title="Runtime Initialization returns 'unsupported_platform'">
+    Sonotide is a **Windows-first** framework heavily relying on WASAPI and Media Foundation. If you attempt to run Sonotide code on macOS or Linux, the runtime will gracefully fall back to a stub backend, returning `error_code::unsupported_platform`.
+  </Accordion>
+  <Accordion title="A stream opens successfully but refuses to start">
+    If `open_render_stream()` succeeds but `start()` fails, it means the framework successfully mapped the target, but the background worker thread encountered a fatal error during initialization.
+    
+    1. Read the `result<void>` error object returned by `start()`. It will contain the exact `HRESULT` failure.
+    2. Check the `stream_status` negotiated format carefully. The driver might have rejected the format request at the last moment.
+  </Accordion>
+</AccordionGroup>

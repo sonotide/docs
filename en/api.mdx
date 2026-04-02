@@ -1,0 +1,586 @@
+---
+title: "API Reference"
+description: "The complete public C++ API surface of Sonotide, organized by header and responsibility."
+---
+
+## How to Read This Reference
+
+This page covers the public headers under `include/sonotide`. It defines the exact contract between your application and the Sonotide framework, including all structures, enums, factory methods, and return types.
+
+<Info>
+  If you are new to the framework, it's highly recommended you read the [Core Concepts](/en/concepts) and [Architecture](/en/architecture) pages first before diving deep into these signatures.
+</Info>
+
+## Header map
+
+| Header | Main types | Use it for |
+| --- | --- | --- |
+| `runtime.h` | `runtime`, `runtime_options` | Creating the framework boundary, enumerating devices, and opening streams or playback sessions |
+| `device_info.h`, `device_selector.h` | `device_info`, `device_selector`, device enums | Describing and selecting endpoints |
+| `audio_format.h`, `audio_buffer.h` | `audio_format`, `format_request`, `audio_buffer_view` | Format negotiation and callback buffers |
+| `stream_config.h`, `stream_callback.h`, `stream_status.h`, `stream_state.h` | stream config types, callbacks, status, state | Configuring and monitoring streams |
+| `render_stream.h`, `capture_stream.h`, `loopback_capture_stream.h` | stream wrapper classes | Explicit stream lifecycle control |
+| `playback_session.h`, `playback_state.h` | `playback_session`, `playback_state` | High-level playback workflows |
+| `equalizer.h` | EQ enums, presets, state helpers | Built-in playback equalization |
+| `error.h`, `result.h` | `error`, `result<T>` | Error transport and success-or-failure returns |
+| `version.h` | version constants | Reporting the framework version |
+
+<div id="api-runtime" />
+
+## `runtime.h`
+
+### `struct runtime_options`
+
+Controls how the framework initializes platform services when you create a
+runtime.
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `initialize_media_foundation` | `bool` | `true` | Initializes Media Foundation during runtime creation. Disable it only if your process already manages Media Foundation explicitly. |
+| `enable_mmcss` | `bool` | `true` | Enables MMCSS for stream worker threads on Windows. This improves scheduling for real-time audio work. |
+
+### `class runtime`
+
+`runtime` is the entry point to Sonotide. It is move-only, owns the platform
+backend, and is responsible for device discovery and stream/session factories.
+
+| Method | Parameters | Returns | Description |
+| --- | --- | --- | --- |
+| `static create(runtime_options options = {})` | `options`: runtime creation settings | `result<runtime>` | Creates the framework boundary. On success, you receive a fully initialized `runtime`. On failure, you receive an `error`. |
+| `enumerate_devices(device_direction direction) const` | `direction`: `render` or `capture` | `result<std::vector<device_info>>` | Enumerates endpoints in the requested direction. |
+| `default_device(device_direction direction, device_role role = device_role::multimedia) const` | `direction`: endpoint direction; `role`: default role to query | `result<device_info>` | Returns the OS default endpoint for the given direction and role. |
+| `open_render_stream(const render_stream_config& config, render_callback& callback)` | `config`: render stream settings; `callback`: object that fills output buffers | `result<render_stream>` | Opens a render stream wrapper. The stream is prepared but not started automatically. |
+| `open_capture_stream(const capture_stream_config& config, capture_callback& callback)` | `config`: capture settings; `callback`: object that consumes input buffers | `result<capture_stream>` | Opens a capture stream wrapper. |
+| `open_loopback_stream(const loopback_stream_config& config, capture_callback& callback)` | `config`: loopback capture settings; `callback`: object that consumes captured system audio | `result<loopback_capture_stream>` | Opens a loopback capture stream wrapper. |
+| `open_playback_session(const playback_session_config& config = {})` | `config`: high-level playback settings | `result<playback_session>` | Opens a playback session built on top of the runtime and render path. |
+
+### Usage example
+
+```cpp
+auto runtime_result = sonotide::runtime::create();
+if (!runtime_result) {
+    return 1;
+}
+
+sonotide::runtime runtime = std::move(runtime_result.value());
+auto devices_result = runtime.enumerate_devices(sonotide::device_direction::render);
+```
+
+## `device_info.h`
+
+<div id="api-device-model" />
+
+### `enum class device_direction`
+
+| Value | Meaning |
+| --- | --- |
+| `render` | Output or playback path |
+| `capture` | Input or recording path |
+
+### `enum class device_role`
+
+| Value | Meaning |
+| --- | --- |
+| `console` | Interactive console audio default |
+| `multimedia` | Default endpoint for regular media playback |
+| `communications` | Default endpoint for calls and chat |
+
+### `enum class device_state`
+
+| Value | Meaning |
+| --- | --- |
+| `active` | The endpoint is available and usable |
+| `disabled` | The endpoint is disabled by the OS |
+| `not_present` | The endpoint exists logically but is currently absent |
+| `unplugged` | The endpoint is unplugged or temporarily unavailable |
+| `unknown` | The state could not be classified |
+
+### `struct device_info`
+
+Describes one enumerated endpoint.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id` | `std::string` | Stable device identifier suitable for storage and later re-selection |
+| `friendly_name` | `std::string` | Human-readable device name |
+| `direction` | `device_direction` | Direction of the endpoint |
+| `state` | `device_state` | Current availability reported by the OS |
+| `is_default_console` | `bool` | `true` if the endpoint is the default console device |
+| `is_default_multimedia` | `bool` | `true` if the endpoint is the default multimedia device |
+| `is_default_communications` | `bool` | `true` if the endpoint is the default communications device |
+
+## `device_selector.h`
+
+### `struct device_selector`
+
+Describes how a stream should pick its target endpoint.
+
+#### `enum class mode`
+
+| Value | Meaning |
+| --- | --- |
+| `system_default` | Resolve the system default endpoint for a direction and role |
+| `explicit_id` | Bind to a specific endpoint identifier |
+
+#### Factory methods
+
+| Method | Parameters | Returns | Description |
+| --- | --- | --- | --- |
+| `system_default(device_direction direction, device_role role = device_role::multimedia)` | `direction`: render or capture; `role`: default role to use | `device_selector` | Builds a selector that resolves the system default endpoint. |
+| `explicit_id(device_direction direction, std::string id)` | `direction`: render or capture; `id`: concrete endpoint identifier | `device_selector` | Builds a selector that binds to a specific endpoint. |
+
+#### Fields
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `selection_mode` | `mode` | Whether selection is by system default or explicit device id |
+| `direction` | `device_direction` | Direction of the endpoint |
+| `role` | `device_role` | Default-role lookup used only when `selection_mode == mode::system_default` |
+| `device_id` | `std::string` | Explicit device identifier used only when `selection_mode == mode::explicit_id` |
+
+## `audio_format.h`
+
+<div id="api-audio-format" />
+
+### `enum class sample_type`
+
+| Value | Meaning |
+| --- | --- |
+| `unknown` | Format has not been negotiated yet |
+| `pcm_i16` | Signed 16-bit PCM |
+| `pcm_i24_in_32` | Packed 24-bit PCM stored inside 32-bit containers |
+| `pcm_i32` | Signed 32-bit PCM |
+| `float32` | 32-bit IEEE floating-point PCM |
+
+### `struct audio_format`
+
+Represents a concrete negotiated device or stream format.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `sample` | `sample_type` | Sample representation |
+| `sample_rate` | `std::uint32_t` | Sample rate in hertz |
+| `channel_count` | `std::uint16_t` | Number of interleaved channels |
+| `bits_per_sample` | `std::uint16_t` | Container width in bits |
+| `valid_bits_per_sample` | `std::uint16_t` | Number of meaningful bits in each container |
+| `channel_mask` | `std::uint32_t` | Channel mask if the endpoint reports one |
+| `interleaved` | `bool` | Whether audio is laid out as interleaved frames |
+
+### `struct format_request`
+
+Describes preferences for format negotiation.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `preferred_sample` | `std::optional<sample_type>` | Preferred sample representation, if you want to constrain negotiation |
+| `preferred_sample_rate` | `std::optional<std::uint32_t>` | Preferred sample rate |
+| `preferred_channel_count` | `std::optional<std::uint16_t>` | Preferred channel count |
+| `interleaved` | `bool` | Whether interleaved layout is required |
+| `allow_mix_format_fallback` | `bool` | Whether Sonotide may fall back to the endpoint mix format |
+
+## `audio_buffer.h`
+
+### `struct stream_timestamp`
+
+Timestamp snapshot attached to callback invocations.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `device_position_frames` | `std::uint64_t` | Device position in frames |
+| `qpc_position_100ns` | `std::uint64_t` | High-resolution QPC timestamp in 100 ns units |
+
+### `struct audio_buffer_view`
+
+Writable render buffer view.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `bytes` | `std::span<std::byte>` | Writable interleaved audio bytes owned by the stream implementation |
+| `frame_count` | `std::uint32_t` | Number of audio frames in the view |
+| `format` | `audio_format` | Negotiated format for the current callback |
+
+### `struct const_audio_buffer_view`
+
+Read-only capture buffer view.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `bytes` | `std::span<const std::byte>` | Immutable interleaved audio bytes owned by the stream implementation |
+| `frame_count` | `std::uint32_t` | Number of audio frames in the view |
+| `format` | `audio_format` | Negotiated format for the current callback |
+
+## `stream_config.h`
+
+<div id="api-streams" />
+
+### `enum class share_mode`
+
+| Value | Meaning |
+| --- | --- |
+| `shared` | Shared WASAPI mode |
+| `exclusive` | Exclusive WASAPI mode when the backend supports it |
+
+### `enum class callback_mode`
+
+| Value | Meaning |
+| --- | --- |
+| `event_driven` | Event-driven callback scheduling |
+
+### `struct stream_timing`
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `target_latency` | `std::chrono::milliseconds` | `20ms` | Desired end-to-end latency |
+| `engine_period` | `std::optional<std::chrono::microseconds>` | empty | Optional engine period override for advanced tuning |
+
+### `struct render_stream_config`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `device` | `device_selector` | Target output endpoint |
+| `mode` | `share_mode` | Requested WASAPI share mode |
+| `callback` | `callback_mode` | Requested callback model |
+| `format` | `format_request` | Preferred audio format |
+| `timing` | `stream_timing` | Stream timing preferences |
+| `auto_recover_device_loss` | `bool` | Whether the backend should attempt device-loss recovery |
+| `prefill_with_silence` | `bool` | Whether to prefill the output buffer with silence before playback starts |
+
+### `struct capture_stream_config`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `device` | `device_selector` | Target capture endpoint |
+| `mode` | `share_mode` | Requested WASAPI share mode |
+| `callback` | `callback_mode` | Requested callback model |
+| `format` | `format_request` | Preferred audio format |
+| `timing` | `stream_timing` | Stream timing preferences |
+| `auto_recover_device_loss` | `bool` | Whether the backend should attempt device-loss recovery |
+| `deliver_silence_on_glitch` | `bool` | Whether to emit silence instead of failing on a capture glitch |
+
+### `struct loopback_stream_config`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `device` | `device_selector` | Target render endpoint whose output should be captured |
+| `mode` | `share_mode` | Requested WASAPI share mode |
+| `callback` | `callback_mode` | Requested callback model |
+| `format` | `format_request` | Preferred audio format |
+| `timing` | `stream_timing` | Stream timing preferences |
+| `auto_recover_device_loss` | `bool` | Whether the backend should attempt device-loss recovery |
+
+## `stream_callback.h`
+
+### `class render_callback`
+
+Implement this interface to fill output buffers.
+
+| Method | Parameters | Returns | Description |
+| --- | --- | --- | --- |
+| `on_render(audio_buffer_view buffer, stream_timestamp timestamp)` | `buffer`: writable output view; `timestamp`: device/QPC snapshot | `result<void>` | Must write audio data for the current render tick. |
+| `on_stream_error(const error& stream_error)` | `stream_error`: asynchronous error notification | `void` | Optional error hook. Override it if you want to log or react to stream faults. |
+
+### `class capture_callback`
+
+Implement this interface to consume captured audio.
+
+| Method | Parameters | Returns | Description |
+| --- | --- | --- | --- |
+| `on_capture(const_audio_buffer_view buffer, stream_timestamp timestamp)` | `buffer`: read-only captured audio; `timestamp`: device/QPC snapshot | `result<void>` | Called when captured frames are available. |
+| `on_stream_error(const error& stream_error)` | `stream_error`: asynchronous error notification | `void` | Optional error hook for capture and loopback streams. |
+
+## `stream_state.h`
+
+### `enum class stream_state`
+
+| Value | Meaning |
+| --- | --- |
+| `created` | The wrapper exists, but the stream is not prepared yet |
+| `prepared` | The stream is open and can be started |
+| `running` | The worker thread is actively processing audio |
+| `stopped` | The stream was stopped and can be reset or closed |
+| `faulted` | The stream hit a runtime fault |
+| `closed` | The stream is permanently closed |
+
+## `stream_status.h`
+
+### `struct stream_statistics`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `callback_count` | `std::uint64_t` | Number of callback invocations so far |
+| `frames_processed` | `std::uint64_t` | Total frames processed by the stream worker |
+| `discontinuity_count` | `std::uint64_t` | Number of discontinuities or glitches observed |
+
+### `struct stream_status`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `state` | `stream_state` | Current stream lifecycle state |
+| `requested_format` | `audio_format` | Format requested by the caller before final negotiation |
+| `negotiated_format` | `std::optional<audio_format>` | Actual device format, when available |
+| `statistics` | `stream_statistics` | Runtime counters for diagnostics |
+| `device_lost` | `bool` | Whether the endpoint was invalidated or disappeared |
+
+## Stream wrapper classes
+
+### Common lifecycle
+
+`render_stream`, `capture_stream`, and `loopback_capture_stream` are move-only
+RAII wrappers. A default-constructed wrapper is empty. A valid wrapper owns a
+backend stream handle.
+
+### Shared public methods
+
+| Method | Parameters | Returns | Description |
+| --- | --- | --- | --- |
+| `is_open() const noexcept` | none | `bool` | Returns `true` if the wrapper currently owns a stream handle. |
+| `start()` | none | `result<void>` | Starts the worker thread and begins audio processing. |
+| `stop()` | none | `result<void>` | Stops the worker thread. |
+| `reset()` | none | `result<void>` | Resets the stream back to `prepared` after it has stopped. |
+| `close()` | none | `result<void>` | Closes the stream permanently. |
+| `status() const` | none | `stream_status` | Returns the current status snapshot. |
+
+### Wrapper-specific roles
+
+| Type | Use it for |
+| --- | --- |
+| `render_stream` | Output playback callbacks |
+| `capture_stream` | Microphone or input capture |
+| `loopback_capture_stream` | Recording the output of a render device |
+
+## `playback_session.h`
+
+<div id="api-playback" />
+
+### `struct playback_session_config`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `render` | `render_stream_config` | Render-stream settings used by the session |
+| `auto_play_on_load` | `bool` | Whether loading a source should automatically start playback |
+| `initial_volume_percent` | `int` | Initial playback volume before the source starts |
+| `initial_equalizer_state` | `std::optional<equalizer_state>` | Optional initial EQ snapshot |
+
+### `class playback_session`
+
+`playback_session` is the high-level playback API built on top of Sonotide
+runtime, Media Foundation decoding, the render path, and the built-in
+equalizer.
+
+| Method | Parameters | Returns | Description |
+| --- | --- | --- | --- |
+| `is_open() const noexcept` | none | `bool` | Returns `true` if the session still owns runtime state. |
+| `load(std::string source_uri)` | `source_uri`: local path or URI to load | `result<void>` | Loads a new source and prepares playback. |
+| `play()` | none | `result<void>` | Starts or resumes playback. |
+| `pause()` | none | `result<void>` | Pauses playback while keeping the source loaded. |
+| `seek_to(std::int64_t position_ms)` | `position_ms`: target position in milliseconds | `result<void>` | Seeks within the current source. |
+| `set_volume_percent(int volume_percent)` | `volume_percent`: user volume from 0 to 100 and above if supported by the implementation | `result<void>` | Changes the playback volume. |
+| `set_equalizer_enabled(bool enabled)` | `enabled`: whether EQ processing is active | `result<void>` | Enables or disables EQ processing. |
+| `select_equalizer_preset(equalizer_preset_id preset_id)` | `preset_id`: built-in preset identifier | `result<void>` | Applies a built-in EQ preset. |
+| `set_equalizer_band_gain(std::size_t band_index, float gain_db)` | `band_index`: zero-based EQ band index; `gain_db`: gain in decibels | `result<void>` | Changes one EQ band. |
+| `reset_equalizer()` | none | `result<void>` | Restores a flat EQ curve. |
+| `set_equalizer_output_gain(float output_gain_db)` | `output_gain_db`: post-EQ gain in decibels | `result<void>` | Adjusts output gain after EQ processing. |
+| `apply_equalizer_state(const equalizer_state& state)` | `state`: full EQ snapshot to apply | `result<void>` | Replaces the current EQ state with a full snapshot. |
+| `list_output_devices() const` | none | `result<std::vector<device_info>>` | Lists output devices available to the session. |
+| `select_output_device(std::string device_id)` | `device_id`: target output endpoint identifier | `result<void>` | Rebinds playback to another output device. |
+| `state() const` | none | `playback_state` | Returns the current playback-state snapshot. |
+| `equalizer_state() const` | none | `equalizer_state` | Returns the current EQ-state snapshot. |
+| `close()` | none | `result<void>` | Closes the session and releases its runtime resources. |
+
+## `playback_state.h`
+
+### `enum class playback_status`
+
+| Value | Meaning |
+| --- | --- |
+| `idle` | No source is loaded or playback has completed |
+| `loading` | The source is opening or decoding is being prepared |
+| `playing` | Audio is currently playing |
+| `paused` | Playback is paused but the source remains loaded |
+| `error` | Playback hit a fatal error |
+
+### `struct playback_state`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `status` | `playback_status` | Current playback lifecycle state |
+| `source_uri` | `std::string` | Active source path or URI |
+| `error_message` | `std::string` | Human-readable error text |
+| `preferred_output_device_id` | `std::string` | Output device requested by the caller |
+| `active_output_device_id` | `std::string` | Endpoint currently active in the backend |
+| `active_output_device_name` | `std::string` | Human-readable name of the active endpoint |
+| `position_ms` | `std::int64_t` | Current playback position in milliseconds |
+| `duration_ms` | `std::int64_t` | Source duration in milliseconds |
+| `volume_percent` | `int` | Current user volume |
+| `completion_token` | `std::uint64_t` | Monotonic counter incremented when playback reaches the end |
+| `negotiated_format` | `std::optional<audio_format>` | Active output format, when available |
+| `active_output_device_is_default` | `bool` | Whether the active output is also the system default |
+| `device_lost` | `bool` | Whether the current endpoint was invalidated or lost |
+
+## `equalizer.h`
+
+<div id="api-equalizer" />
+
+### Constants and enums
+
+#### `equalizer_band_count`
+
+| Constant | Value | Meaning |
+| --- | --- | --- |
+| `equalizer_band_count` | `10` | Number of fixed bands exposed by the built-in equalizer |
+
+#### `enum class equalizer_preset_id`
+
+| Value | Meaning |
+| --- | --- |
+| `flat` | Flat response |
+| `bass_boost` | Stronger low-end emphasis |
+| `treble_boost` | Stronger high-end emphasis |
+| `vocal` | Vocal intelligibility focus |
+| `pop` | Pop-oriented curve |
+| `rock` | Rock-oriented curve |
+| `electronic` | Electronic-music curve |
+| `hip_hop` | Hip-hop-oriented curve |
+| `jazz` | Jazz-oriented curve |
+| `classical` | Classical-oriented curve |
+| `acoustic` | Acoustic-oriented curve |
+| `dance` | Dance-oriented curve |
+| `piano` | Piano-oriented curve |
+| `spoken_podcast` | Spoken-word and podcast focus |
+| `loudness` | Loudness-style perception boost |
+| `custom` | User-modified state that no longer matches a built-in preset |
+
+#### `enum class equalizer_status`
+
+| Value | Meaning |
+| --- | --- |
+| `loading` | EQ metadata is still being prepared |
+| `ready` | EQ is available for processing |
+| `unsupported_audio_path` | The current audio path does not support this EQ configuration |
+| `audio_engine_unavailable` | The audio engine is unavailable |
+| `error` | The EQ pipeline is in an error state |
+
+### `struct equalizer_band`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `center_frequency_hz` | `float` | Fixed band center frequency in hertz |
+| `gain_db` | `float` | Gain applied to the band in decibels |
+
+### `struct equalizer_preset`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id` | `equalizer_preset_id` | Preset identifier |
+| `title` | `const char*` | Human-readable preset title |
+| `gains_db` | `std::array<float, equalizer_band_count>` | Gain values for all bands |
+
+### `struct equalizer_state`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `status` | `equalizer_status` | Current EQ availability state |
+| `enabled` | `bool` | Whether EQ processing is enabled |
+| `active_preset_id` | `equalizer_preset_id` | Currently active preset identifier |
+| `bands` | `std::array<equalizer_band, equalizer_band_count>` | Current per-band values |
+| `last_nonflat_band_gains_db` | `std::array<float, equalizer_band_count>` | Most recent user-modified non-flat gains |
+| `available_presets` | `std::vector<equalizer_preset>` | Presets exposed to the caller |
+| `output_gain_db` | `float` | Post-EQ output gain in decibels |
+| `headroom_compensation_db` | `float` | Automatically calculated preamp compensation |
+| `error_message` | `std::string` | Error text when EQ is unavailable or faulted |
+
+### Helper functions
+
+| Function | Parameters | Returns | Description |
+| --- | --- | --- | --- |
+| `to_string(equalizer_preset_id preset_id)` | `preset_id`: preset identifier | `std::string_view` | Returns a stable string token for a preset id. |
+| `to_string(equalizer_status status)` | `status`: EQ status value | `std::string_view` | Returns a stable string token for an EQ status. |
+| `equalizer_preset_id_from_string(std::string_view value)` | `value`: stable preset token | `std::optional<equalizer_preset_id>` | Parses a preset identifier from a string token. |
+
+## `error.h`
+
+<div id="api-error-result" />
+
+### `enum class error_category`
+
+| Value | Meaning |
+| --- | --- |
+| `configuration` | Invalid input or configuration |
+| `initialization` | Initialization or startup failure |
+| `device` | Device lookup or selection failure |
+| `format` | Format negotiation failure |
+| `stream` | Stream lifecycle or processing failure |
+| `callback` | Callback contract violation or callback-generated failure |
+| `platform` | Platform-specific failure |
+
+### `enum class error_code`
+
+| Value | Meaning |
+| --- | --- |
+| `invalid_argument` | Invalid input was supplied |
+| `invalid_state` | The operation was called in the wrong state |
+| `unsupported_platform` | The current platform does not support the requested operation |
+| `initialization_failed` | Runtime initialization failed |
+| `device_not_found` | The requested device could not be found |
+| `device_enumeration_failed` | Device enumeration failed |
+| `format_negotiation_failed` | Format negotiation failed |
+| `stream_open_failed` | Stream opening failed |
+| `stream_start_failed` | Stream startup failed |
+| `stream_stop_failed` | Stream shutdown failed |
+| `callback_failed` | The callback returned a failure |
+| `platform_failure` | Generic platform-level failure |
+| `not_implemented` | The requested capability is not implemented yet |
+
+### `struct error`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `category` | `error_category` | Error group |
+| `code` | `error_code` | Specific code inside the group |
+| `message` | `std::string` | Human-readable error message |
+| `operation` | `std::string` | Operation that produced the error |
+| `native_code` | `std::optional<std::int64_t>` | Native platform code such as an `HRESULT`, when available |
+| `recoverable` | `bool` | Whether the caller may retry or recover |
+
+### Helper functions
+
+| Function | Parameters | Returns | Description |
+| --- | --- | --- | --- |
+| `to_string(error_category category) noexcept` | `category`: error group | `std::string_view` | Returns a stable string token for an error category. |
+| `to_string(error_code code) noexcept` | `code`: error code | `std::string_view` | Returns a stable string token for an error code. |
+
+## `result.h`
+
+### `template <typename T> class result`
+
+`result<T>` is the main success-or-error transport type in Sonotide.
+
+| Method | Parameters | Returns | Description |
+| --- | --- | --- | --- |
+| `static success(T value)` | `value`: successful payload | `result<T>` | Creates a successful result. |
+| `static failure(error failure)` | `failure`: error payload | `result<T>` | Creates a failed result. |
+| `has_value() const noexcept` | none | `bool` | Returns `true` if a value is present. |
+| `operator bool() const noexcept` | none | `bool` | Convenience success check. |
+| `value() &` / `value() const&` / `value() &&` | none | `T&`, `const T&`, or `T&&` | Returns the stored value. Call only when `has_value()` is `true`. |
+| `error() &` / `error() const&` | none | `error&` or `const error&` | Returns the stored error. Call only when `has_value()` is `false`. |
+
+### `class result<void>`
+
+Specialization for operations that return only success or failure.
+
+| Method | Parameters | Returns | Description |
+| --- | --- | --- | --- |
+| `static success()` | none | `result<void>` | Creates a successful void result. |
+| `static failure(error failure)` | `failure`: error payload | `result<void>` | Creates a failed void result. |
+| `has_value() const noexcept` | none | `bool` | Returns `true` if the operation succeeded. |
+| `operator bool() const noexcept` | none | `bool` | Convenience success check. |
+| `error() const&` | none | `const error&` | Returns the stored error when the result is a failure. |
+
+## `version.h`
+
+| Constant | Type | Meaning |
+| --- | --- | --- |
+| `version_major` | `int` | Major version number |
+| `version_minor` | `int` | Minor version number |
+| `version_patch` | `int` | Patch version number |
+| `version_string` | `std::string_view` | Human-readable semantic version string |

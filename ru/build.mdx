@@ -1,0 +1,53 @@
+---
+title: "Детали сборки"
+description: "Подробное объяснение процесса сборки Sonotide в Windows через пресеты CMake и Visual Studio."
+---
+
+Sonotide упрощает процесс компиляции, централизуя все важные настройки в пресетах CMake. Этот подход гарантирует одинаковый результат сборки при работе из командной строки, прямо из Visual Studio или в CI/CD инфраструктуре.
+
+## Рекомендуемый процесс сборки
+
+Проект рассчитан на использование пресета `msvc-x64-debug`. 
+
+<CodeGroup>
+```bash Стандартный PATH
+# Если cmake уже добавлен в системные переменные:
+cmake --preset msvc-x64-debug
+cmake --build --preset msvc-x64-debug
+ctest --preset msvc-x64-debug
+```
+
+```bat Абсолютный путь
+# Использование cmake напрямую из папки Visual Studio:
+"C:\Program Files\Microsoft Visual Studio\18\Professional\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --preset msvc-x64-debug
+"C:\Program Files\Microsoft Visual Studio\18\Professional\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build --preset msvc-x64-debug
+```
+
+```bash Через интеграцию WSL
+# Сборка под Windows напрямую из окружения WSL:
+"/mnt/c/Program Files/Microsoft Visual Studio/18/Professional/Common7\IDE/CommonExtensions/Microsoft/CMake/CMake/bin\cmake.exe" --preset msvc-x64-debug
+"/mnt/c/Program Files/Microsoft Visual Studio/18/Professional/Common7\IDE/CommonExtensions/Microsoft/CMake/CMake/bin\cmake.exe" --build --preset msvc-x64-debug
+```
+</CodeGroup>
+
+<Info>
+  **Зачем вообще нужны пресеты?**  
+  Пресет жёстко связывает вместе нужный генератор, директорию сборки и конфигурацию тестов. Это избавляет от классической проблемы CMake в мультиконфигурационных средах, когда дерево файлов сгенерировано, а `ctest` жалуется, что не понимает какую конфигурацию (`Debug` или `Release`) ему запускать.
+</Info>
+
+## Запуск CTest вручную
+
+Если вы предпочитаете запускать тесты напрямую, минуя систему пресетов, вам необходимо указать целевую директорию сборки и явно задать конфигурацию для тестирования:
+
+```bash
+ctest --test-dir build/msvc-x64-debug -C Debug
+```
+
+## Чеклист проверки правильной настройки
+
+Если сборка падает, пройдитесь по следующим пунктам:
+
+- Выполните `cmake --version`, чтобы убедиться, что компилятор доступен.
+- Команда `where cmake` (cmd) или `which cmake` (WSL / Bash) покажет путь до активного бинарника.
+- Выполните `git status --short`, чтобы убедиться, что в репозитории нет конфликтующих несохранённых изменений.
+- Всегда запускайте базовый пример (например, `build\msvc-x64-debug\examples\Debug\sonotide_list_devices.exe`), чтобы проверить, хватает ли в системе runtime зависимостей для работы фреймворка.

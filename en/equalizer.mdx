@@ -1,0 +1,51 @@
+---
+title: "Built-in Equalizer"
+description: "Leverage Sonotide's built-in 10-band equalizer to fine-tune playback audio."
+---
+
+When using the `playback_session`, Sonotide provides a fully integrated 10-band graphic equalizer. Since standard Windows WASAPI does not provide this out of the box, Sonotide wires it up natively inside the Media Foundation decode pipeline so you don't have to build your own DSP chain from scratch.
+
+## 1. Equalizer Basics
+
+To interact with the equalizer, use the methods directly attached to your `playback_session`:
+
+```cpp
+// 1. Turn it on
+session.set_equalizer_enabled(true);
+
+// 2. Load a built-in tuning curve
+session.select_equalizer_preset(sonotide::equalizer_preset_id::rock);
+
+// 3. Lower the output gain to prevent digital clipping
+session.set_equalizer_output_gain(-1.5f);
+```
+
+## 2. Advanced Tuning
+
+If the built-in presets (`rock`, `jazz`, `spoken_podcast`, etc.) don't fit your needs, you can manipulate each of the 10 bands manually:
+
+```cpp
+// Boost the sub-bass frequency slightly
+session.set_equalizer_band_gain(0, 3.5f); 
+```
+
+<Warning>
+  Pushing bands aggressively above `+0dB` can cause digital clipping. If you drastically boost certain frequencies, be sure to lower the `output_gain_db` to compensate.
+</Warning>
+
+## 3. Reading the Equalizer State
+
+You can take a snapshot of the current EQ settings via `session.equalizer_state()`. This returns a struct that contains everything your UI needs to draw faders:
+
+<CardGroup cols={2}>
+  <Card title="Current Gains & Status" icon="sliders">
+    Read the `bands` array to see exact Hz frequencies and current dB gains. Check if EQ is `enabled`.
+  </Card>
+  <Card title="Available Presets" icon="list">
+    Read the `available_presets` array to populate a dropdown menu in your application.
+  </Card>
+</CardGroup>
+
+## Design Note
+
+The equalizer is built into the framework because it is an essential part of a reusable media playback pipeline. However, if your application needs complex parametrics (compressors, limiters, reverb), you should skip the built-in EQ and apply your own DSP chain manually on the raw chunks provided by a `render_stream`.

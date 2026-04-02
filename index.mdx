@@ -1,97 +1,55 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Sonotide docs"
+description: "Choose your language and open the Sonotide framework documentation."
 ---
 
-## Setting up
+<div className="sonotide-hero">
+  <span className="sonotide-kicker">Windows audio framework</span>
+  <h1>Sonotide documentation</h1>
+  <p className="sonotide-lead">
+    Sonotide is a standalone C++20 framework for Windows audio. It gives you a
+    clean runtime layer for devices, streams, playback sessions, and
+    equalization without exposing raw COM ownership in the public API.
+  </p>
 
-Get your documentation site up and running in minutes.
+  <div className="sonotide-hero-grid">
+    <div className="sonotide-hero-card">
+      <strong>English</strong>
+      <p>Product overview, quickstart, API reference, and examples.</p>
+      <a href="/en/index">Open the English docs</a>
+    </div>
+    <div className="sonotide-hero-card">
+      <strong>Русский</strong>
+      <p>Обзор фреймворка, быстрый старт, справка по API и примеры.</p>
+      <a href="/ru/index">Открыть русскую документацию</a>
+    </div>
+    <div className="sonotide-hero-card">
+      <strong>Framework first</strong>
+      <p>The docs focus on reusable audio infrastructure, not on a specific app.</p>
+      <a href="/en/concepts">Read the core concepts</a>
+    </div>
+  </div>
+</div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+## What Sonotide is
 
-## Make it yours
+Sonotide sits at the audio infrastructure boundary. It handles device
+enumeration, format negotiation, render and capture streams, loopback capture,
+and a higher-level playback session built on top of the runtime.
 
-Design a docs site that looks great and empowers your users.
+## Start here
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/en/getting-started">
+    Build the framework, run the samples, and verify the preset-based workflow.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Concepts" icon="book" href="/en/concepts">
+    Learn how runtime, streams, playback, and equalization fit together.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="API reference" icon="code" href="/en/api">
+    See the public types, methods, and fields documented in one place.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Examples" icon="terminal" href="/en/examples">
+    Run the sample programs and check the framework in a real environment.
   </Card>
-</Columns>
-
-## Create beautiful pages
-
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+</CardGroup>

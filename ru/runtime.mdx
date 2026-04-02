@@ -1,0 +1,77 @@
+---
+title: "Контекст Runtime"
+description: "Как объект runtime задаёт границу инфраструктуры аудио, ищет подключенные устройства и генерирует потоки."
+---
+
+[`runtime`](/ru/api#api-runtime) — это фундамент Sonotide. Это тот самый объект, который переводит библиотеку из состояния "просто набор заголовочных файлов" в работающую аудиосистему ОС.
+
+Он берёт на себя владение платформенным бекендом, предоставляет интерфейсы для поиска оборудования и выступает в роли "фабрики" для создания потоков. Если вы внедряете Sonotide в свой проект, `runtime` — это первое, с чем вы столкнётесь.
+
+## 1. Инициализация фреймворка
+
+Структура [`runtime_options`](/ru/api#api-runtime) определяет поведение системы в момент старта:
+- `initialize_media_foundation`: Активирует подсистему Media Foundation (нужна для декодирования файлов).
+- `enable_mmcss`: Включает MMCSS, чтобы дать рабочим потокам аудио приоритет реального времени в планировщике Windows.
+
+<Info>Для 99% задач настройки по умолчанию `{}` — это именно то, что нужно.</Info>
+
+```cpp
+auto runtime_result = sonotide::runtime::create();
+
+if (!runtime_result) {
+    // Обработка критической системной ошибки при старте
+    return 1;
+}
+
+// Забираем владение готовым к работе объектом runtime
+sonotide::runtime runtime = std::move(runtime_result.value());
+```
+
+## 2. Поиск устройств (Endpoint Discovery)
+
+Вместо того чтобы заставлять вас работать с COM-интерфейсами `IMMDevice` и `IMMDeviceCollection`, Sonotide предлагает чистый и безопасный C++ API: [`enumerate_devices(direction)`](/ru/api#api-runtime) и [`default_device(direction, role)`](/ru/api#api-runtime).
+
+В ответ вы получаете простые структуры [`device_info`](/ru/api#api-device-model):
+
+```cpp
+auto devices_result = runtime.enumerate_devices(sonotide::device_direction::render);
+
+if (devices_result) {
+    for (const auto& device : devices_result.value()) {
+        std::cout << "Найдено: " << device.friendly_name 
+                  << " (ID: " << device.id << ")\n";
+    }
+}
+```
+
+## 3. Создание потоков
+
+Когда у вас есть активный `runtime` и выбранный ID устройства, вы можете открывать аудиосессии:
+
+<CardGroup cols={2}>
+  <Card title="open_render_stream" icon="volume-high">
+    Отправка сырого PCM-аудио на динамики или наушники.
+  </Card>
+  <Card title="open_capture_stream" icon="microphone">
+    Захват PCM-аудио с микрофона или линейного входа.
+  </Card>
+  <Card title="open_loopback_stream" icon="laptop">
+    Захват системного звука (запись "того, что в колонках").
+  </Card>
+  <Card title="open_playback_session" icon="play">
+    Создание комплексной сессии с декодером, громкостью и эквалайзером.
+  </Card>
+</CardGroup>
+
+## Когда сырых потоков достаточно?
+
+Нужны ли вам сырые потоки или лучше сразу перейти к `playback_session`? 
+
+**Оставайтесь на уровне потоков (stream layer), если:**
+- Ваше приложение само декодирует звук и вычисляет сэмплы (например, синтезатор или игра).
+- Вы пишете приложение для записи звонков или VOIP.
+- Вы переписываете старый legacy WASAPI код на Sonotide небольшими итерациями.
+
+<Note>
+Но если всё, что вам нужно — это включить `.mp3` с возможностью паузы и настройки громкости, игнорируйте потоки и сразу используйте высокоуровневую [`playback_session`](/ru/api#api-playback).
+</Note>

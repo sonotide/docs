@@ -1,0 +1,76 @@
+---
+title: "Streams API"
+description: "Understanding render, capture, and loopback streams in Sonotide and their unified lifecycle."
+---
+
+Sonotide abstracts the complexity of WASAPI by providing three distinct stream facade classes that all share the exact same lifecycle logic.
+
+<CardGroup cols={3}>
+  <Card title="Render" icon="volume-high">
+    [`render_stream`](/en/api#api-streams) sends PCM data to output devices (speakers, headphones).
+  </Card>
+  <Card title="Capture" icon="microphone">
+    [`capture_stream`](/en/api#api-streams) receives PCM data from input devices (microphones).
+  </Card>
+  <Card title="Loopback" icon="laptop-code">
+    [`loopback_capture_stream`](/en/api#api-streams) grabs system audio currently playing on an endpoint.
+  </Card>
+</CardGroup>
+
+## The Unified Lifecycle
+
+Regardless of the type of stream you are dealing with, they all expose an identical state machine:
+
+<Steps>
+  <Step title="is_open()">Check if resources have been allocated.</Step>
+  <Step title="start()">Spin up the worker thread and begin audio processing.</Step>
+  <Step title="stop()">Gracefully halt the thread.</Step>
+  <Step title="reset()">Clear the negotiated format and readiness state.</Step>
+  <Step title="close()">Destroy the underlying handles.</Step>
+</Steps>
+
+<Info>
+  This uniformity is a core design principle. Once you know how to build a render stream, building a capture stream feels exactly the same.
+</Info>
+
+## Configuration Drives Behavior
+
+To open a stream, you pass a specific config type to the runtime factory methods:
+
+```cpp
+sonotide::render_stream_config config;
+config.device_selector = sonotide::device_selector::default_multimedia();
+// Optional: specify format preferences here.
+
+auto stream_result = runtime.open_render_stream(config, my_callback);
+```
+
+Common configuration fields across all stream types:
+- `device_selector`: How to find the target hardware.
+- `share_mode` / `callback_mode`: WASAPI integration hints.
+- `format_request`: Strict or flexible format negotiation.
+- `stream_timing`: Latency hints.
+- `auto_recover_device_loss`: How to handle USB disconnects.
+
+## The Callback Contract
+
+Sonotide handles the threading, you handle the byte-filling. 
+
+- **Render**: Your `on_render(...)` callback receives a mutable `audio_buffer_view` that you must fill with PCM data.
+- **Capture**: Your `on_capture(...)` callback receives a read-only `const_audio_buffer_view` holding recorded data.
+- **Failures**: Overriding `on_stream_error(...)` gives you an asynchronous hook for fatal failures.
+
+<Warning>
+  Callbacks execute on a high-priority worker thread. Do **not** block this thread with mutexes, file I/O, or network calls, otherwise the audio will glitch.
+</Warning>
+
+## Monitoring the Truth
+
+Instead of querying COM properties, just ask for the [`stream_status`](/en/api#api-streams):
+
+```cpp
+auto status = my_stream.status();
+std::cout << "State: " << (int)status.state << "\n";
+std::cout << "Frames processed: " << status.worker_frames_processed << "\n";
+std::cout << "Did we lose the USB device? " << status.device_lost << "\n";
+```

@@ -1,0 +1,64 @@
+---
+title: "Введение"
+description: "Встречайте Sonotide: Современный C++20 фреймворк для работы со звуком в Windows."
+---
+
+<div className="sonotide-hero">
+  <span className="sonotide-kicker">Windows Audio Фреймворк</span>
+  <h1>Напишите аудио-слой один раз.<br/>Используйте везде.</h1>
+  <p className="sonotide-lead">
+    Sonotide прячет всю сложность работы с WASAPI и Media Foundation за элегантным и безопасным C++20 API. Хватит бороться с COM-поинтерами — сфокусируйтесь на продукте.
+  </p>
+
+  <div className="sonotide-hero-grid">
+    <div className="sonotide-hero-card">
+      <strong>Никаких утечек COM</strong>
+      <p>Управляйте устройствами, форматами и потоками без единого прямого вызова <code>IUnknown</code> в вашем коде.</p>
+    </div>
+    <div className="sonotide-hero-card">
+      <strong>Всё для воспроизведения</strong>
+      <p>Используйте готовую <code>playback_session</code> с загрузкой треков, перемоткой, громкостью и встроенным 10-полосным эквалайзером.</p>
+    </div>
+    <div className="sonotide-hero-card">
+      <strong>Чистая архитектура</strong>
+      <p>Изолируйте работу со звуком внутри фреймворка, оставляя логику приложения чистой и тестируемой.</p>
+    </div>
+  </div>
+</div>
+
+## Почему Sonotide?
+
+Разработка звука под Windows часто превращается в хаос из коллбеков, бесконечных согласований форматов аудо и обработки отключений устройств. **Sonotide решает эту проблему**, превращая весь рутинный код в надёжный переиспользуемый слой.
+
+<CardGroup cols={2}>
+  <Card title="Современный C++20" icon="bolt">
+    Явная типизация, современная семантика и безопасная работа с ошибками через `result<T>` вместо исключений.
+  </Card>
+  <Card title="Гибкое управление потоками" icon="wave-square">
+    Нативная поддержка потоков вывода (render), ввода (capture) и захвата (loopback) поверх WASAPI.
+  </Card>
+</CardGroup>
+
+## Как это работает?
+
+<div className="sonotide-panel">
+  <p>
+    Вместо монолитных бекендов Sonotide предлагает модульный подход с явными абстракциями:
+    <a href="/ru/api#api-runtime"><code>runtime</code></a>, <a href="/ru/api#api-streams"><code>render_stream</code></a> и <a href="/ru/api#api-playback"><code>playback_session</code></a>. Всё просто и предсказуемо.
+  </p>
+</div>
+
+1. **Инициализация:** Создайте `runtime` для поиска устройств и согласования форматов.
+2. **Потоки:** Открывайте напрямую `render_stream` или `capture_stream` для работы с буфером.
+3. **Воспроизведение:** Используйте `playback_session`, если вам нужны высокоуровневые возможности — загрузка файлов, маршрутизация звука и эквалайзер сразу из коробки.
+
+## Начните прямо сейчас
+
+<CardGroup cols={2}>
+  <Card title="Быстрый старт" icon="rocket" href="/ru/getting-started" color="#818cf8">
+    Соберите и запустите проект за 5 минут.
+  </Card>
+  <Card title="Ключевые концепции" icon="book-sparkles" href="/ru/concepts" color="#c084fc">
+    Погрузитесь в архитектуру и логику работы фреймворка.
+  </Card>
+</CardGroup>

@@ -1,0 +1,64 @@
+---
+title: "Introduction"
+description: "Meet Sonotide: The definitive C++20 framework for Windows audio."
+---
+
+<div className="sonotide-hero">
+  <span className="sonotide-kicker">Windows Audio Framework</span>
+  <h1>Build the Audio Layer Once.<br/>Reuse It Everywhere.</h1>
+  <p className="sonotide-lead">
+    Sonotide wraps the complexity of WASAPI and Media Foundation inside a sleek, modern, and type-safe C++20 API. Stop fighting COM pointers and start building your product.
+  </p>
+
+  <div className="sonotide-hero-grid">
+    <div className="sonotide-hero-card">
+      <strong>Zero COM Leakage</strong>
+      <p>Interact with devices, negotiate formats, and control streams safely without ever touching a raw <code>IUnknown</code>.</p>
+    </div>
+    <div className="sonotide-hero-card">
+      <strong>Unified Playback</strong>
+      <p>Get a complete <code>playback_session</code> including loading, seeking, volume, routing, and an integrated 10-band EQ.</p>
+    </div>
+    <div className="sonotide-hero-card">
+      <strong>Clear Boundary</strong>
+      <p>Isolate infrastructure code in the framework so your application logic stays focused on features and UI.</p>
+    </div>
+  </div>
+</div>
+
+## Why Choose Sonotide?
+
+Windows audio development often devolves into a messy web of device discovery callbacks, stream initialization, format negotiation, and device loss handling. **Sonotide changes the game** by consolidating these repetitive tasks into a robust, reusable framework.
+
+<CardGroup cols={2}>
+  <Card title="Modern C++20 Design" icon="bolt">
+    Employs modern semantics, explicit typing, and a robust `result<T>` error model instead of exceptions.
+  </Card>
+  <Card title="Flexible Stream API" icon="wave-square">
+    Native support for render, capture, and loopback streams built directly on top of WASAPI.
+  </Card>
+</CardGroup>
+
+## Architecture at a Glance
+
+<div className="sonotide-panel">
+  <p>
+    Instead of monolithic backends, Sonotide provides modular, explicit types:
+    <a href="/en/api#api-runtime"><code>runtime</code></a>, <a href="/en/api#api-streams"><code>render_stream</code></a>, and <a href="/en/api#api-playback"><code>playback_session</code></a>. Everything works together seamlessly.
+  </p>
+</div>
+
+1. **Initialization:** Create a `runtime` to negotiate formats and discover devices.
+2. **Streaming:** Open explicit `render_stream` or `capture_stream` objects.
+3. **Playback:** Move up to a `playback_session` if you need high-level transport controls and effects out-of-the-box.
+
+## Start Building
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="/en/getting-started" color="#818cf8">
+    Get up and running in less than 5 minutes.
+  </Card>
+  <Card title="Core Concepts" icon="book-sparkles" href="/en/concepts" color="#c084fc">
+    Dive deep into the architecture and mental model.
+  </Card>
+</CardGroup>

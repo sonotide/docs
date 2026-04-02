@@ -1,0 +1,69 @@
+---
+title: "Core Concepts"
+description: "Understand the mental model behind Sonotide: runtime, devices, streams, and playback."
+---
+
+When working with Windows audio, it's easy to get lost in the weeds of COM. Sonotide's primary goal is to provide a clean, robust mental model that maps directly to what you actually want to achieve.
+
+## 1. Start from the Boundary
+
+The most important idea in Sonotide is that your application integrates with the **framework boundary**, not with raw COM objects.
+
+You start with the [`runtime`](/en/api#api-runtime), describe what you want using configurations, and monitor the state using snapshots like [`stream_status`](/en/api#api-streams).
+
+<CardGroup cols={2}>
+  <Card title="What Sonotide Owns" icon="shield-check">
+    - Endpoint discovery & default devices
+    - Stream creation & lifecycle
+    - Shared-mode format negotiation
+    - Worker threads & callbacks
+    - Robust error handling
+  </Card>
+  <Card title="What Your App Owns" icon="code">
+    - Business logic & user flows
+    - Playlists, network, UI
+    - Custom DSP logic (outside the built-in EQ)
+    - Persistence
+  </Card>
+</CardGroup>
+
+## 2. Streams are Explicit by Design
+
+Audio processing shouldn't happen magically in the background. Sonotide makes the lifecycle explicit:
+
+<Steps>
+  <Step title="Open">Configure and prepare the stream without starting it.</Step>
+  <Step title="Start">Begin audio processing and callback dispatch.</Step>
+  <Step title="Stop">Halt processing cleanly.</Step>
+</Steps>
+
+<Info>
+  Because streams are explicit, **device loss is never silently swallowed**. You can always read the `stream_status` to see exactly what happened during negotiation or if the underlying device was disconnected.
+</Info>
+
+## 3. Playback is a Layer, Not a Special Backend
+
+While streams give you raw bytes, many apps need more: loading files, route switching, seeking, volume control, and EQ.
+
+That's why Sonotide provides the [`playback_session`](/en/api#api-playback). 
+It doesn't replace the runtime model; it builds on top of it. It acts as a powerful orchestrator so you don't have to reinvent the wheel for standard playback scenarios.
+
+## 4. Modern Error Handling
+
+Forget about throwing exceptions in the audio hot path. Sonotide returns a [`result<T>`](/en/api#api-error-result) for almost every operation.
+
+```cpp
+auto runtime_result = sonotide::runtime::create();
+
+if (!runtime_result) {
+    const auto& err = runtime_result.error();
+    // Safe and structured: you have access to err.message, 
+    // err.operation, and err.native_code (the HRESULT).
+    return;
+}
+
+// Safely unwrap
+auto runtime = std::move(runtime_result.value());
+```
+
+This pattern ensures that failures are handled exactly where they occur, making the integration incredibly predictable.

@@ -1,0 +1,69 @@
+---
+title: "Quickstart"
+description: "Build Sonotide using the MSVC preset, run the samples, and verify everything is working in just a few minutes."
+---
+
+Welcome to Sonotide! This guide will walk you through compiling the framework and running your first audio examples to ensure your environment is set up correctly.
+
+<Note>
+  Sonotide relies on C++20 features, so you'll need an up-to-date compiler. We recommend MSVC.
+</Note>
+
+## Prerequisites
+
+Before starting, make sure you have the following installed:
+- **Windows 10** or **Windows 11**
+- **Visual Studio 2022** (or newer) with the Desktop development with C++ workload
+- **CMake** (either from Visual Studio or globally available in your `PATH`)
+
+<Steps>
+  <Step title="Configure the build environment">
+    First, generate the CMake cache using the pre-configured `msvc-x64-debug` preset. This preset guarantees all tests and examples are properly wired up.
+    
+    ```bash
+    cmake --preset msvc-x64-debug
+    ```
+    
+    <Info>If `cmake` isn't in your PATH, you can use the full path to the Visual Studio CMake binary.</Info>
+  </Step>
+
+  <Step title="Build the framework">
+    Next, compile the library, tests, and examples.
+    
+    ```bash
+    cmake --build --preset msvc-x64-debug
+    ```
+  </Step>
+
+  <Step title="Run the test suite">
+    Verify the framework core logic by running the unit tests using `ctest`.
+    
+    ```bash
+    ctest --preset msvc-x64-debug
+    ```
+    
+    <Warning>If you are exploring the build tree manually without the preset, you must pass `-C Debug` to CTest to avoid "No tests were found" errors.</Warning>
+  </Step>
+
+  <Step title="Try the examples">
+    If the tests pass, you are ready to hear some audio! Run the compiled examples from the build directory:
+
+    **List available audio endpoints:**
+    ```bat
+    build\msvc-x64-debug\examples\Debug\sonotide_list_devices.exe
+    ```
+    
+    **Play a test sound (silence test):**
+    ```bat
+    build\msvc-x64-debug\examples\Debug\sonotide_render_silence.exe
+    ```
+
+    **Test the high-level playback session:**
+    ```bat
+    build\msvc-x64-debug\examples\Debug\sonotide_playback_session.exe "C:\Windows\Media\notify.wav"
+    ```
+  </Step>
+</Steps>
+
+## What's Next?
+Now that the framework is running on your machine, you can explore the [Core Concepts](/en/concepts) to understand how the architecture works, or dive straight into the [API Reference](/en/api).

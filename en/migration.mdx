@@ -1,0 +1,50 @@
+---
+title: "Migration Guide"
+description: "A step-by-step path for elegantly migrating an existing raw WASAPI codebase to Sonotide."
+---
+
+If your application already has a working but complex WASAPI backend, ripping it all out at once is a recipe for regressions. The safest way to introduce Sonotide is to replace the reusable audio layers step-by-step, leaving your product-specific business logic untouched until the new path is perfectly stable.
+
+<Steps>
+  <Step title="Step 1: Move Device Enumeration">
+    Replace direct `IMMDeviceEnumerator` usage with `runtime::enumerate_devices()`.
+    
+    This instantly removes nasty COM object handling (`IPropertyStore`, `IMMDevice`) from your UI or settings services, replacing them with clean `device_info` structs.
+  </Step>
+
+  <Step title="Step 2: Port the Render Path">
+    If your app already decodes its own PCM data, simply wrap your decoded frames in a Sonotide render callback. Stop worrying about `IAudioRenderClient::GetBuffer()`.
+    
+    ```cpp
+    class pcm_render_callback final : public sonotide::render_callback {
+    public:
+        sonotide::result<void> on_render(
+            sonotide::audio_buffer_view buffer,
+            sonotide::stream_timestamp) override {
+            // Copy your already-prepared PCM frames into buffer.bytes
+            return sonotide::result<void>::success();
+        }
+    };
+    ```
+  </Step>
+
+  <Step title="Step 3: Consider the Playback Session">
+    If you realize your app is manually doing file decoding, tracking playback transport (play/pause), and handling volume all on the main thread — it's time to delete that code. Move entirely to `runtime::open_playback_session()` and let Sonotide handle the orchestration.
+  </Step>
+
+  <Step title="Step 4: Move Capture & Loopback">
+    Once your output (render) path is stable, switch your microphone capture and system loopback logic to `runtime::open_capture_stream()` and `runtime::open_loopback_stream()`.
+  </Step>
+
+  <Step title="Step 5: Delete the Legacy Code">
+    When the new path is stable and your tests are green, brutally delete the old layer built on `IAudioClient`, `IAudioRenderClient`, and `IAudioCaptureClient`. Enjoy the negative line count in your pull request!
+  </Step>
+</Steps>
+
+## What SHOULD stay in your app?
+
+Even after migrating to Sonotide, your application should still own:
+- Decoding (unless you explicitly use `playback_session`).
+- Application state and UI.
+- User settings persistence (saving the preferred `device_id` to disk).
+- Product logic that does not belong in a generic reusable audio layer.

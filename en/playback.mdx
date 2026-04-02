@@ -1,0 +1,73 @@
+---
+title: "Playback Session"
+description: "High-level media playback, output routing, volume control, and equalization out of the box."
+---
+
+Handling bare `render_stream` chunks of PCM data is great for raw audio processing, but what if you just want to build a music player? Applications frequently need to:
+- Load an audio file (decode).
+- Play, Pause, and Seek.
+- Control Master Volume and EQ.
+- Seamlessly transition between output devices exactly when the user plugs in headphones.
+
+Instead of forcing you to build these common features from scratch around the raw stream API, Sonotide provides the [`playback_session`](/en/api#api-playback).
+
+## 1. Setting up the Session
+
+The session is created from the `runtime` factory, much like raw streams.
+
+```cpp
+sonotide::playback_session_config config;
+config.auto_play_on_load = true;
+config.initial_volume_percent = 75;
+
+auto session_result = runtime.open_playback_session(config);
+if (!session_result) return;
+
+sonotide::playback_session session = std::move(session_result.value());
+```
+
+## 2. Core Transport Methods
+
+The session gives you transport control that directly translates to user-facing UI actions:
+
+<CardGroup cols={2}>
+  <Card title="Loading Media" icon="file-audio">
+    `session.load(R"(C:\Windows\Media\tada.wav)");`  
+    Leverages Media Foundation under the hood.
+  </Card>
+  <Card title="Playback Control" icon="play">
+    `session.play();`  
+    `session.pause();`
+  </Card>
+  <Card title="Time Navigation" icon="fast-forward">
+    `session.seek_to(std::chrono::seconds(15));`
+  </Card>
+  <Card title="Output Volume" icon="volume-low">
+    `session.set_volume_percent(50);`
+  </Card>
+</CardGroup>
+
+## 3. Device Routing
+
+A massive pain point in Windows audio is managing the active audio device when building a custom player. `playback_session` handles this gracefully:
+
+```cpp
+// Show the user a list of what's currently plugged in
+auto available_outputs = session.list_output_devices();
+
+// Switch playback to a specific endpoint seamlessly
+session.select_output_device(headphones_id);
+```
+
+## 4. Querying Playback State
+
+You don't need to register complicated event listeners just to update a UI progress bar. Instead, call `session.state()` on a standard UI timer to poll the structured [`playback_state`](/en/api#api-playback) snapshot.
+
+This model allows React/Vue style state-driven UIs to simply pull the truth:
+- `status`: Is it `Playing`, `Paused`, or `Failed`?
+- `position_ms` / `duration_ms`: Where are we in the track?
+- `active_output_device_name`: What's actually rendering the sound right now?
+
+<Info>
+  Use `playback_session` whenever you deal with media source files or need a standard "transport" logic layer. Stick to `render_stream` only when your app actively synthesizes tone data itself.
+</Info>

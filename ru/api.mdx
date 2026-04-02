@@ -1,0 +1,585 @@
+---
+title: "Справка API"
+description: "Полная публичная поверхность C++ API Sonotide, разложенная по заголовочным файлам."
+---
+
+## Как читать эту страницу
+
+Здесь собраны публичные классы, структуры и методы из `include/sonotide`. Страница является строгим техническим контрактом между вашим приложением и библиотекой Sonotide.
+
+<Info>
+  Если вы только знакомитесь с фреймворком, настоятельно рекомендуем сначала прочитать [Ключевые концепции](/ru/concepts) и [Архитектуру](/ru/architecture), прежде чем вчитываться в детальные сигнатуры функций.
+</Info>
+
+## Карта заголовков
+
+| Заголовок | Основные типы | Для чего нужен |
+| --- | --- | --- |
+| `runtime.h` | `runtime`, `runtime_options` | Создание границы фреймворка, перечисление устройств, открытие потоков и playback session |
+| `device_info.h`, `device_selector.h` | `device_info`, `device_selector`, device enum-ы | Описание и выбор endpoint-ов |
+| `audio_format.h`, `audio_buffer.h` | `audio_format`, `format_request`, `audio_buffer_view` | Согласование форматов и буферы callback-ов |
+| `stream_config.h`, `stream_callback.h`, `stream_status.h`, `stream_state.h` | конфигурации, callback-и, статусы и состояния | Настройка и мониторинг потоков |
+| `render_stream.h`, `capture_stream.h`, `loopback_capture_stream.h` | классы-обёртки потоков | Явное управление жизненным циклом потоков |
+| `playback_session.h`, `playback_state.h` | `playback_session`, `playback_state` | Высокоуровневое воспроизведение |
+| `equalizer.h` | EQ enum-ы, пресеты, состояние и helper-функции | Встроенный эквалайзер для playback |
+| `error.h`, `result.h` | `error`, `result<T>` | Возврат ошибок и успешных значений |
+| `version.h` | константы версии | Версия фреймворка |
+
+<div id="api-runtime" />
+
+## `runtime.h`
+
+### `struct runtime_options`
+
+Определяет, какие платформенные подсистемы включаются при создании `runtime`.
+
+| Поле | Тип | Значение по умолчанию | Смысл |
+| --- | --- | --- | --- |
+| `initialize_media_foundation` | `bool` | `true` | Инициализирует Media Foundation во время создания `runtime`. Отключайте только если процесс управляет Media Foundation сам. |
+| `enable_mmcss` | `bool` | `true` | Включает MMCSS для рабочих потоков аудио на Windows. Это улучшает планирование real-time задач. |
+
+### `class runtime`
+
+`runtime` — точка входа в Sonotide. Это move-only объект, который владеет
+платформенным backend-ом и отвечает за фабрики потоков и playback session.
+
+| Метод | Параметры | Возвращает | Описание |
+| --- | --- | --- | --- |
+| `static create(runtime_options options = {})` | `options`: настройки создания | `result<runtime>` | Создаёт границу фреймворка. При успехе возвращает готовый `runtime`, при ошибке — `error`. |
+| `enumerate_devices(device_direction direction) const` | `direction`: `render` или `capture` | `result<std::vector<device_info>>` | Перечисляет endpoint-ы в указанном направлении. |
+| `default_device(device_direction direction, device_role role = device_role::multimedia) const` | `direction`: направление endpoint-а; `role`: роль системного устройства по умолчанию | `result<device_info>` | Возвращает системное устройство по умолчанию для заданного направления и роли. |
+| `open_render_stream(const render_stream_config& config, render_callback& callback)` | `config`: настройки вывода; `callback`: объект, который заполняет выходной буфер | `result<render_stream>` | Открывает поток вывода. Поток подготавливается, но не стартует автоматически. |
+| `open_capture_stream(const capture_stream_config& config, capture_callback& callback)` | `config`: настройки захвата; `callback`: объект, который потребляет входной буфер | `result<capture_stream>` | Открывает поток захвата. |
+| `open_loopback_stream(const loopback_stream_config& config, capture_callback& callback)` | `config`: настройки loopback-захвата; `callback`: объект, который потребляет системный звук | `result<loopback_capture_stream>` | Открывает loopback-поток. |
+| `open_playback_session(const playback_session_config& config = {})` | `config`: настройки high-level playback | `result<playback_session>` | Открывает playback session поверх `runtime` и пути вывода. |
+
+### Пример
+
+```cpp
+auto runtime_result = sonotide::runtime::create();
+if (!runtime_result) {
+    return 1;
+}
+
+sonotide::runtime runtime = std::move(runtime_result.value());
+auto devices_result = runtime.enumerate_devices(sonotide::device_direction::render);
+```
+
+## `device_info.h`
+
+<div id="api-device-model" />
+
+### `enum class device_direction`
+
+| Значение | Смысл |
+| --- | --- |
+| `render` | Путь вывода или воспроизведения |
+| `capture` | Путь ввода или записи |
+
+### `enum class device_role`
+
+| Значение | Смысл |
+| --- | --- |
+| `console` | Интерактивное устройство Console по умолчанию |
+| `multimedia` | Стандартное мультимедийное устройство по умолчанию |
+| `communications` | Устройство по умолчанию для звонков и чатов |
+
+### `enum class device_state`
+
+| Значение | Смысл |
+| --- | --- |
+| `active` | Endpoint доступен и пригоден к работе |
+| `disabled` | Endpoint отключён на уровне ОС |
+| `not_present` | Endpoint существует логически, но сейчас отсутствует |
+| `unplugged` | Endpoint отключён физически или временно недоступен |
+| `unknown` | Состояние не удалось классифицировать |
+
+### `struct device_info`
+
+Описывает один перечисленный endpoint.
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `id` | `std::string` | Стабильный идентификатор устройства, который можно сохранять и использовать повторно |
+| `friendly_name` | `std::string` | Человекочитаемое имя устройства |
+| `direction` | `device_direction` | Направление endpoint-а |
+| `state` | `device_state` | Текущее состояние доступности |
+| `is_default_console` | `bool` | `true`, если это устройство по умолчанию для Console |
+| `is_default_multimedia` | `bool` | `true`, если это устройство по умолчанию для Multimedia |
+| `is_default_communications` | `bool` | `true`, если это устройство по умолчанию для Communications |
+
+## `device_selector.h`
+
+### `struct device_selector`
+
+Описывает, как поток должен выбрать целевой endpoint.
+
+#### `enum class mode`
+
+| Значение | Смысл |
+| --- | --- |
+| `system_default` | Разрешить системное устройство по умолчанию по направлению и роли |
+| `explicit_id` | Привязаться к конкретному `device_id` |
+
+#### Фабричные методы
+
+| Метод | Параметры | Возвращает | Описание |
+| --- | --- | --- | --- |
+| `system_default(device_direction direction, device_role role = device_role::multimedia)` | `direction`: `render` или `capture`; `role`: роль системного устройства | `device_selector` | Создаёт селектор, который разрешает системное устройство по умолчанию. |
+| `explicit_id(device_direction direction, std::string id)` | `direction`: `render` или `capture`; `id`: конкретный идентификатор endpoint-а | `device_selector` | Создаёт селектор, привязанный к конкретному `device_id`. |
+
+#### Поля
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `selection_mode` | `mode` | Режим выбора: системное устройство или явный идентификатор |
+| `direction` | `device_direction` | Направление endpoint-а |
+| `role` | `device_role` | Роль системного устройства, используется только при `selection_mode == mode::system_default` |
+| `device_id` | `std::string` | Явный идентификатор устройства, используется только при `selection_mode == mode::explicit_id` |
+
+## `audio_format.h`
+
+<div id="api-audio-format" />
+
+### `enum class sample_type`
+
+| Значение | Смысл |
+| --- | --- |
+| `unknown` | Формат ещё не согласован |
+| `pcm_i16` | Знаковый PCM 16 бит |
+| `pcm_i24_in_32` | Упакованный PCM 24 бит в 32-битном контейнере |
+| `pcm_i32` | Знаковый PCM 32 бит |
+| `float32` | 32-битный PCM в формате IEEE float |
+
+### `struct audio_format`
+
+Конкретный формат устройства или потока после согласования.
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `sample` | `sample_type` | Представление сэмпла |
+| `sample_rate` | `std::uint32_t` | Частота дискретизации в герцах |
+| `channel_count` | `std::uint16_t` | Число interleaved-каналов |
+| `bits_per_sample` | `std::uint16_t` | Ширина контейнера на сэмпл в битах |
+| `valid_bits_per_sample` | `std::uint16_t` | Количество полезных бит в контейнере |
+| `channel_mask` | `std::uint32_t` | Маска каналов, если устройство её сообщает |
+| `interleaved` | `bool` | Признак interleaved-раскладки |
+
+### `struct format_request`
+
+Предпочтения вызывающего кода для negotiation формата.
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `preferred_sample` | `std::optional<sample_type>` | Предпочитаемый тип сэмпла, если нужно сузить выбор |
+| `preferred_sample_rate` | `std::optional<std::uint32_t>` | Предпочитаемая частота дискретизации |
+| `preferred_channel_count` | `std::optional<std::uint16_t>` | Предпочитаемое число каналов |
+| `interleaved` | `bool` | Требуется ли interleaved-раскладка |
+| `allow_mix_format_fallback` | `bool` | Может ли Sonotide откатиться к формату системного микшера |
+
+## `audio_buffer.h`
+
+### `struct stream_timestamp`
+
+Снимок времени, прикреплённый к вызову callback.
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `device_position_frames` | `std::uint64_t` | Позиция устройства в кадрах |
+| `qpc_position_100ns` | `std::uint64_t` | QPC-время в единицах 100 нс |
+
+### `struct audio_buffer_view`
+
+Изменяемое представление render-буфера.
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `bytes` | `std::span<std::byte>` | Изменяемые interleaved-байты, которыми владеет реализация потока |
+| `frame_count` | `std::uint32_t` | Количество кадров в текущем буфере |
+| `format` | `audio_format` | Согласованный формат для текущего callback |
+
+### `struct const_audio_buffer_view`
+
+Только для чтения представление capture-буфера.
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `bytes` | `std::span<const std::byte>` | Неизменяемые interleaved-байты, которыми владеет реализация потока |
+| `frame_count` | `std::uint32_t` | Количество кадров в текущем буфере |
+| `format` | `audio_format` | Согласованный формат для текущего callback |
+
+## `stream_config.h`
+
+<div id="api-streams" />
+
+### `enum class share_mode`
+
+| Значение | Смысл |
+| --- | --- |
+| `shared` | Shared mode WASAPI |
+| `exclusive` | Exclusive mode WASAPI, если backend его поддерживает |
+
+### `enum class callback_mode`
+
+| Значение | Смысл |
+| --- | --- |
+| `event_driven` | Событийная модель callback-ов |
+
+### `struct stream_timing`
+
+| Поле | Тип | Значение по умолчанию | Смысл |
+| --- | --- | --- | --- |
+| `target_latency` | `std::chrono::milliseconds` | `20ms` | Желаемая end-to-end задержка |
+| `engine_period` | `std::optional<std::chrono::microseconds>` | пусто | Необязательный override периода движка для тонкой настройки |
+
+### `struct render_stream_config`
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `device` | `device_selector` | Целевой выходной endpoint |
+| `mode` | `share_mode` | Запрошенный режим WASAPI |
+| `callback` | `callback_mode` | Запрошенная модель callback |
+| `format` | `format_request` | Предпочтения по формату |
+| `timing` | `stream_timing` | Тайминговые предпочтения |
+| `auto_recover_device_loss` | `bool` | Нужно ли пытаться восстановиться после потери устройства |
+| `prefill_with_silence` | `bool` | Нужно ли предзаполнять выходной буфер тишиной до старта |
+
+### `struct capture_stream_config`
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `device` | `device_selector` | Целевой входной endpoint |
+| `mode` | `share_mode` | Запрошенный режим WASAPI |
+| `callback` | `callback_mode` | Запрошенная модель callback |
+| `format` | `format_request` | Предпочтения по формату |
+| `timing` | `stream_timing` | Тайминговые предпочтения |
+| `auto_recover_device_loss` | `bool` | Нужно ли пытаться восстановиться после потери устройства |
+| `deliver_silence_on_glitch` | `bool` | Нужно ли отдавать тишину вместо ошибки при glitch захвата |
+
+### `struct loopback_stream_config`
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `device` | `device_selector` | Render-endpoint, чей output нужно захватывать |
+| `mode` | `share_mode` | Запрошенный режим WASAPI |
+| `callback` | `callback_mode` | Запрошенная модель callback |
+| `format` | `format_request` | Предпочтения по формату |
+| `timing` | `stream_timing` | Тайминговые предпочтения |
+| `auto_recover_device_loss` | `bool` | Нужно ли пытаться восстановиться после потери устройства |
+
+## `stream_callback.h`
+
+### `class render_callback`
+
+Реализуйте этот интерфейс, если поток должен запрашивать у вас данные для
+вывода.
+
+| Метод | Параметры | Возвращает | Описание |
+| --- | --- | --- | --- |
+| `on_render(audio_buffer_view buffer, stream_timestamp timestamp)` | `buffer`: изменяемый выходной буфер; `timestamp`: снимок позиции устройства и времени | `result<void>` | Должен записать аудиоданные для текущего render-tick. |
+| `on_stream_error(const error& stream_error)` | `stream_error`: асинхронное уведомление об ошибке | `void` | Необязательный hook для журналирования или реакции на fault потока. |
+
+### `class capture_callback`
+
+Реализуйте этот интерфейс, если поток должен отдавать вам захваченные данные.
+
+| Метод | Параметры | Возвращает | Описание |
+| --- | --- | --- | --- |
+| `on_capture(const_audio_buffer_view buffer, stream_timestamp timestamp)` | `buffer`: буфер захваченного аудио только для чтения; `timestamp`: снимок позиции устройства и времени | `result<void>` | Вызывается, когда очередная порция данных готова. |
+| `on_stream_error(const error& stream_error)` | `stream_error`: асинхронное уведомление об ошибке | `void` | Необязательный hook для capture и loopback-потоков. |
+
+## `stream_state.h`
+
+### `enum class stream_state`
+
+| Значение | Смысл |
+| --- | --- |
+| `created` | Объект существует, но поток ещё не подготовлен |
+| `prepared` | Поток открыт и готов к запуску |
+| `running` | Рабочий поток активно обрабатывает аудио |
+| `stopped` | Поток остановлен и может быть сброшен или закрыт |
+| `faulted` | Поток столкнулся с runtime-ошибкой |
+| `closed` | Поток закрыт окончательно |
+
+## `stream_status.h`
+
+### `struct stream_statistics`
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `callback_count` | `std::uint64_t` | Количество вызовов callback на текущий момент |
+| `frames_processed` | `std::uint64_t` | Общее число обработанных кадров |
+| `discontinuity_count` | `std::uint64_t` | Количество разрывов, discontinuity или glitch-событий |
+
+### `struct stream_status`
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `state` | `stream_state` | Текущее состояние жизненного цикла |
+| `requested_format` | `audio_format` | Формат, который запросил вызывающий код до финального согласования |
+| `negotiated_format` | `std::optional<audio_format>` | Реальный формат устройства, если он уже известен |
+| `statistics` | `stream_statistics` | Runtime-счётчики для диагностики |
+| `device_lost` | `bool` | Был ли endpoint инвалидирован или потерян |
+
+## Классы-обёртки потоков
+
+### Общий жизненный цикл
+
+`render_stream`, `capture_stream` и `loopback_capture_stream` — move-only
+RAII-обёртки. Объект, созданный по умолчанию, пустой. Валидный объект владеет
+backend handle потока.
+
+### Общие публичные методы
+
+| Метод | Параметры | Возвращает | Описание |
+| --- | --- | --- | --- |
+| `is_open() const noexcept` | нет | `bool` | Возвращает `true`, если обёртка сейчас владеет handle потока. |
+| `start()` | нет | `result<void>` | Запускает рабочий поток и стартует обработку аудио. |
+| `stop()` | нет | `result<void>` | Останавливает рабочий поток. |
+| `reset()` | нет | `result<void>` | Возвращает поток в состояние `prepared` после остановки. |
+| `close()` | нет | `result<void>` | Закрывает поток окончательно. |
+| `status() const` | нет | `stream_status` | Возвращает актуальный снимок состояния. |
+
+### Роли конкретных типов
+
+| Тип | Для чего использовать |
+| --- | --- |
+| `render_stream` | Вывод аудио через callback заполнения буфера |
+| `capture_stream` | Захват микрофона или другого входного источника |
+| `loopback_capture_stream` | Захват output-а render-устройства |
+
+## `playback_session.h`
+
+<div id="api-playback" />
+
+### `struct playback_session_config`
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `render` | `render_stream_config` | Настройки render-потока, который использует сессия |
+| `auto_play_on_load` | `bool` | Нужно ли автоматически стартовать воспроизведение после загрузки источника |
+| `initial_volume_percent` | `int` | Начальная громкость до старта воспроизведения |
+| `initial_equalizer_state` | `std::optional<equalizer_state>` | Необязательный начальный снимок эквалайзера |
+
+### `class playback_session`
+
+`playback_session` — high-level API для воспроизведения поверх `runtime`,
+Media Foundation, render path и встроенного эквалайзера.
+
+| Метод | Параметры | Возвращает | Описание |
+| --- | --- | --- | --- |
+| `is_open() const noexcept` | нет | `bool` | Возвращает `true`, если сессия всё ещё владеет runtime-состоянием. |
+| `load(std::string source_uri)` | `source_uri`: локальный путь или URI источника | `result<void>` | Загружает новый источник и подготавливает воспроизведение. |
+| `play()` | нет | `result<void>` | Стартует или возобновляет воспроизведение. |
+| `pause()` | нет | `result<void>` | Ставит воспроизведение на паузу, не выгружая источник. |
+| `seek_to(std::int64_t position_ms)` | `position_ms`: целевая позиция в миллисекундах | `result<void>` | Выполняет seek внутри текущего источника. |
+| `set_volume_percent(int volume_percent)` | `volume_percent`: пользовательская громкость в процентах | `result<void>` | Меняет громкость воспроизведения. |
+| `set_equalizer_enabled(bool enabled)` | `enabled`: активна ли EQ-обработка | `result<void>` | Включает или выключает EQ-обработку. |
+| `select_equalizer_preset(equalizer_preset_id preset_id)` | `preset_id`: идентификатор встроенного пресета | `result<void>` | Применяет один из встроенных EQ-пресетов. |
+| `set_equalizer_band_gain(std::size_t band_index, float gain_db)` | `band_index`: индекс полосы от нуля; `gain_db`: усиление в dB | `result<void>` | Меняет одну полосу эквалайзера. |
+| `reset_equalizer()` | нет | `result<void>` | Возвращает эквалайзер в плоское состояние. |
+| `set_equalizer_output_gain(float output_gain_db)` | `output_gain_db`: выходное усиление после EQ в dB | `result<void>` | Меняет post-EQ gain. |
+| `apply_equalizer_state(const equalizer_state& state)` | `state`: полный снимок EQ | `result<void>` | Целиком заменяет текущее состояние эквалайзера. |
+| `list_output_devices() const` | нет | `result<std::vector<device_info>>` | Возвращает список выходных устройств, доступных сессии. |
+| `select_output_device(std::string device_id)` | `device_id`: идентификатор целевого endpoint-а | `result<void>` | Перепривязывает воспроизведение к другому устройству вывода. |
+| `state() const` | нет | `playback_state` | Возвращает текущий снимок playback-состояния. |
+| `equalizer_state() const` | нет | `equalizer_state` | Возвращает текущий снимок состояния эквалайзера. |
+| `close()` | нет | `result<void>` | Закрывает сессию и освобождает связанные ресурсы. |
+
+## `playback_state.h`
+
+### `enum class playback_status`
+
+| Значение | Смысл |
+| --- | --- |
+| `idle` | Источник не загружен или воспроизведение завершилось |
+| `loading` | Источник открывается или декодирование подготавливается |
+| `playing` | Аудио сейчас воспроизводится |
+| `paused` | Воспроизведение остановлено на паузу, но источник остаётся загруженным |
+| `error` | Воспроизведение завершилось фатальной ошибкой |
+
+### `struct playback_state`
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `status` | `playback_status` | Текущее состояние жизненного цикла воспроизведения |
+| `source_uri` | `std::string` | Активный путь или URI источника |
+| `error_message` | `std::string` | Человекочитаемый текст ошибки |
+| `preferred_output_device_id` | `std::string` | Устройство вывода, которое запросил вызывающий код |
+| `active_output_device_id` | `std::string` | Endpoint, который сейчас реально активен в backend-е |
+| `active_output_device_name` | `std::string` | Человекочитаемое имя активного endpoint-а |
+| `position_ms` | `std::int64_t` | Текущая позиция воспроизведения в миллисекундах |
+| `duration_ms` | `std::int64_t` | Длительность источника в миллисекундах |
+| `volume_percent` | `int` | Текущая пользовательская громкость |
+| `completion_token` | `std::uint64_t` | Монотонный счётчик, который увеличивается при достижении конца воспроизведения |
+| `negotiated_format` | `std::optional<audio_format>` | Активный формат вывода, если он уже известен |
+| `active_output_device_is_default` | `bool` | Является ли активное устройство также системным устройством по умолчанию |
+| `device_lost` | `bool` | Был ли текущий endpoint потерян или инвалидирован |
+
+## `equalizer.h`
+
+<div id="api-equalizer" />
+
+### Константы и enum-ы
+
+#### `equalizer_band_count`
+
+| Константа | Значение | Смысл |
+| --- | --- | --- |
+| `equalizer_band_count` | `10` | Количество фиксированных полос встроенного эквалайзера |
+
+#### `enum class equalizer_preset_id`
+
+| Значение | Смысл |
+| --- | --- |
+| `flat` | Плоская АЧХ |
+| `bass_boost` | Усиление низких частот |
+| `treble_boost` | Усиление высоких частот |
+| `vocal` | Настройка под разборчивость вокала |
+| `pop` | Кривая под поп-музыку |
+| `rock` | Кривая под рок |
+| `electronic` | Кривая под электронную музыку |
+| `hip_hop` | Кривая под hip-hop |
+| `jazz` | Кривая под jazz |
+| `classical` | Кривая под classical |
+| `acoustic` | Кривая под acoustic |
+| `dance` | Кривая под dance |
+| `piano` | Кривая под piano |
+| `spoken_podcast` | Настройка под речь и подкасты |
+| `loudness` | Кривая под ощущение loudness |
+| `custom` | Пользовательское состояние, которое больше не совпадает с встроенным пресетом |
+
+#### `enum class equalizer_status`
+
+| Значение | Смысл |
+| --- | --- |
+| `loading` | Метаданные эквалайзера ещё подготавливаются |
+| `ready` | Эквалайзер готов к обработке |
+| `unsupported_audio_path` | Текущий аудиотракт не поддерживает такую конфигурацию |
+| `audio_engine_unavailable` | Аудиодвижок недоступен |
+| `error` | EQ-пайплайн находится в состоянии ошибки |
+
+### `struct equalizer_band`
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `center_frequency_hz` | `float` | Центральная частота полосы в герцах |
+| `gain_db` | `float` | Усиление полосы в децибелах |
+
+### `struct equalizer_preset`
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `id` | `equalizer_preset_id` | Идентификатор пресета |
+| `title` | `const char*` | Человекочитаемый заголовок пресета |
+| `gains_db` | `std::array<float, equalizer_band_count>` | Усиления всех полос |
+
+### `struct equalizer_state`
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `status` | `equalizer_status` | Текущее состояние доступности EQ |
+| `enabled` | `bool` | Включена ли EQ-обработка |
+| `active_preset_id` | `equalizer_preset_id` | Идентификатор текущего активного пресета |
+| `bands` | `std::array<equalizer_band, equalizer_band_count>` | Текущие настройки полос |
+| `last_nonflat_band_gains_db` | `std::array<float, equalizer_band_count>` | Последние пользовательские non-flat значения полос |
+| `available_presets` | `std::vector<equalizer_preset>` | Набор пресетов, доступный вызывающему коду |
+| `output_gain_db` | `float` | Выходное усиление после EQ в dB |
+| `headroom_compensation_db` | `float` | Автоматически рассчитанная компенсация запаса по уровню |
+| `error_message` | `std::string` | Текст ошибки, если EQ недоступен или сломан |
+
+### Вспомогательные функции
+
+| Функция | Параметры | Возвращает | Описание |
+| --- | --- | --- | --- |
+| `to_string(equalizer_preset_id preset_id)` | `preset_id`: идентификатор пресета | `std::string_view` | Возвращает стабильный строковый токен пресета. |
+| `to_string(equalizer_status status)` | `status`: статус EQ | `std::string_view` | Возвращает стабильный строковый токен статуса. |
+| `equalizer_preset_id_from_string(std::string_view value)` | `value`: строковый токен пресета | `std::optional<equalizer_preset_id>` | Парсит идентификатор пресета из строки. |
+
+## `error.h`
+
+<div id="api-error-result" />
+
+### `enum class error_category`
+
+| Значение | Смысл |
+| --- | --- |
+| `configuration` | Ошибка входных параметров или конфигурации |
+| `initialization` | Ошибка инициализации или запуска |
+| `device` | Ошибка поиска или выбора устройства |
+| `format` | Ошибка согласования формата |
+| `stream` | Ошибка жизненного цикла или обработки потока |
+| `callback` | Нарушение контракта callback или ошибка из callback |
+| `platform` | Платформенная ошибка |
+
+### `enum class error_code`
+
+| Значение | Смысл |
+| --- | --- |
+| `invalid_argument` | Передан неверный аргумент |
+| `invalid_state` | Операция вызвана в неподходящем состоянии |
+| `unsupported_platform` | Текущая платформа не поддерживает операцию |
+| `initialization_failed` | Инициализация не удалась |
+| `device_not_found` | Запрошенное устройство не найдено |
+| `device_enumeration_failed` | Перечисление устройств завершилось ошибкой |
+| `format_negotiation_failed` | Согласование формата завершилось ошибкой |
+| `stream_open_failed` | Не удалось открыть поток |
+| `stream_start_failed` | Не удалось запустить поток |
+| `stream_stop_failed` | Не удалось остановить поток |
+| `callback_failed` | Callback вернул ошибку |
+| `platform_failure` | Общая платформенная ошибка |
+| `not_implemented` | Возможность ещё не реализована |
+
+### `struct error`
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `category` | `error_category` | Категория ошибки |
+| `code` | `error_code` | Конкретный код внутри категории |
+| `message` | `std::string` | Человекочитаемый текст ошибки |
+| `operation` | `std::string` | Операция, которая породила ошибку |
+| `native_code` | `std::optional<std::int64_t>` | Нативный код платформы, например `HRESULT`, если он доступен |
+| `recoverable` | `bool` | Можно ли попытаться восстановиться или повторить операцию |
+
+### Вспомогательные функции
+
+| Функция | Параметры | Возвращает | Описание |
+| --- | --- | --- | --- |
+| `to_string(error_category category) noexcept` | `category`: категория ошибки | `std::string_view` | Возвращает стабильный строковый токен категории. |
+| `to_string(error_code code) noexcept` | `code`: код ошибки | `std::string_view` | Возвращает стабильный строковый токен кода. |
+
+## `result.h`
+
+### `template <typename T> class result`
+
+`result<T>` — основной тип возврата вида “значение или ошибка” в Sonotide.
+
+| Метод | Параметры | Возвращает | Описание |
+| --- | --- | --- | --- |
+| `static success(T value)` | `value`: успешное значение | `result<T>` | Создаёт успешный результат. |
+| `static failure(error failure)` | `failure`: объект ошибки | `result<T>` | Создаёт неуспешный результат. |
+| `has_value() const noexcept` | нет | `bool` | Возвращает `true`, если внутри есть значение. |
+| `operator bool() const noexcept` | нет | `bool` | Удобная проверка на успех. |
+| `value() &` / `value() const&` / `value() &&` | нет | `T&`, `const T&` или `T&&` | Возвращает сохранённое значение. Вызывать только при `has_value() == true`. |
+| `error() &` / `error() const&` | нет | `error&` или `const error&` | Возвращает сохранённую ошибку. Вызывать только при `has_value() == false`. |
+
+### `class result<void>`
+
+Специализация для операций, которые возвращают только успех или ошибку.
+
+| Метод | Параметры | Возвращает | Описание |
+| --- | --- | --- | --- |
+| `static success()` | нет | `result<void>` | Создаёт успешный void-результат. |
+| `static failure(error failure)` | `failure`: объект ошибки | `result<void>` | Создаёт неуспешный void-результат. |
+| `has_value() const noexcept` | нет | `bool` | Возвращает `true`, если операция завершилась успешно. |
+| `operator bool() const noexcept` | нет | `bool` | Удобная проверка на успех. |
+| `error() const&` | нет | `const error&` | Возвращает ошибку, если результат неуспешен. |
+
+## `version.h`
+
+| Константа | Тип | Смысл |
+| --- | --- | --- |
+| `version_major` | `int` | Мажорная версия |
+| `version_minor` | `int` | Минорная версия |
+| `version_patch` | `int` | Патч-версия |
+| `version_string` | `std::string_view` | Человекочитаемая semantic version строка |
