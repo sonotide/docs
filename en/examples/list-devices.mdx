@@ -1,0 +1,61 @@
+---
+title: "List devices"
+description: "Use the shipped device-enumeration example to inspect render endpoints and default-device flags."
+---
+
+Use this example when you want to verify that Sonotide can see the Windows
+audio stack and return stable endpoint metadata.
+
+## What the example does
+
+1. Creates [`runtime`](/en/reference/api#api-runtime).
+2. Calls `enumerate_devices(device_direction::render)`.
+3. Prints `id`, `friendly_name`, and the default-device flag.
+
+## Key code
+
+```cpp
+auto runtime_result = sonotide::runtime::create();
+if (!runtime_result) {
+    std::cerr << runtime_result.error().message << '\n';
+    return 1;
+}
+
+sonotide::runtime audio_runtime = std::move(runtime_result.value());
+auto devices_result = audio_runtime.enumerate_devices(sonotide::device_direction::render);
+if (!devices_result) {
+    std::cerr << devices_result.error().message << '\n';
+    return 1;
+}
+
+for (const auto& device : devices_result.value()) {
+    std::cout << device.id << " | " << device.friendly_name;
+    if (device.is_default_multimedia) {
+        std::cout << " | default multimedia";
+    }
+    std::cout << '\n';
+}
+```
+
+## Why it is written this way
+
+- [`runtime::create()`](/en/reference/api#api-runtime) is the framework boundary. If it
+  fails, the example prints the structured error and stops immediately.
+- [`device_info`](/en/reference/api#api-device-model) is enough for application code. The
+  example never reaches for COM objects.
+- Printing the default-device flag makes the sample useful both as a smoke test
+  and as a starting point for a settings UI.
+
+## How to adapt it
+
+Use this pattern if you need:
+
+- an output-device picker;
+- a diagnostics command that prints available endpoints;
+- a first migration step away from direct `IMMDeviceEnumerator` usage.
+
+## Run it
+
+```bat
+build\msvc-x64-debug\examples\Debug\sonotide_list_devices.exe
+```

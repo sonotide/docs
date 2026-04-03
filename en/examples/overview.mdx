@@ -1,0 +1,57 @@
+---
+title: "Examples overview"
+description: "Browse the Sonotide examples as separate guides instead of one long page."
+---
+
+## Why this section is split
+
+Sonotide now documents each example as its own page. That makes the sidebar
+more useful: you can jump directly to the exact scenario you need instead of
+scrolling through one large document.
+
+The examples fall into two groups:
+
+- shipped executables from the framework repository;
+- fuller walkthroughs that show application-level usage patterns beyond
+  `examples/`.
+
+## Shipped examples
+
+<CardGroup cols={3}>
+  <Card title="List devices" icon="list" href="/en/examples/list-devices">
+    Endpoint discovery through `runtime` and `enumerate_devices(...)`.
+  </Card>
+  <Card title="Render silence" icon="volume-low" href="/en/examples/render-silence">
+    The smallest safe render path with a minimal callback.
+  </Card>
+  <Card title="Playback session" icon="play" href="/en/examples/playback-session">
+    High-level playback, loading, polling, and transport state.
+  </Card>
+</CardGroup>
+
+## Walkthrough cases
+
+<CardGroup cols={2}>
+  <Card title="Output probe" icon="speaker-simple-high" href="/en/examples/output-probe">
+    Open a stream on a specific device, inspect the negotiated format, and read lifecycle status.
+  </Card>
+  <Card title="Spoken-word player" icon="waveform" href="/en/examples/spoken-player">
+    Build a small player workflow around `playback_session`, routing, EQ, and state polling.
+  </Card>
+</CardGroup>
+
+## Running the shipped examples from WSL
+
+```bash
+cmd.exe /c build\\msvc-x64-debug\\examples\\Debug\\sonotide_list_devices.exe
+cmd.exe /c build\\msvc-x64-debug\\examples\\Debug\\sonotide_render_silence.exe
+cmd.exe /c "build\\msvc-x64-debug\\examples\\Debug\\sonotide_playback_session.exe C:\\Windows\\Media\\notify.wav"
+```
+
+## Which page to start with
+
+- Start with [List devices](/en/examples/list-devices) if you need to validate the runtime boundary and endpoint metadata.
+- Start with [Render silence](/en/examples/render-silence) if you already own PCM and only need an output path.
+- Start with [Playback session](/en/examples/playback-session) if you want a reusable playback workflow inside the framework.
+- Start with [Output probe](/en/examples/output-probe) if your app lets the user validate a specific output device.
+- Start with [Spoken-word player](/en/examples/spoken-player) if you are building a small player driven by `playback_state`.

@@ -1,0 +1,70 @@
+---
+title: "Playback session"
+description: "Use the shipped playback-session example to load a source, poll transport state, and observe completion."
+---
+
+Use this example when you want to see the high-level playback layer in action:
+loading, playback state, transport progress, and source completion.
+
+## What the example does
+
+1. Creates [`runtime`](/en/reference/api#api-runtime).
+2. Opens [`playback_session`](/en/reference/api#api-playback).
+3. Loads a local file or URI.
+4. Polls [`playback_state`](/en/reference/api#api-playback) until playback completes or fails.
+
+## Key code
+
+```cpp
+auto session_result = audio_runtime.open_playback_session();
+if (!session_result) {
+    std::cerr << session_result.error().message << '\n';
+    return 1;
+}
+
+auto load_result = session_result.value().load(argv[1]);
+if (!load_result) {
+    std::cerr << load_result.error().message << '\n';
+    return 1;
+}
+
+while (true) {
+    const auto state = session_result.value().state();
+    std::cout << "status=" << static_cast<int>(state.status)
+              << " position_ms=" << state.position_ms
+              << " duration_ms=" << state.duration_ms << '\n';
+
+    if (state.status == sonotide::playback_status::idle ||
+        state.status == sonotide::playback_status::error) {
+        break;
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+}
+```
+
+## Why it is written this way
+
+- [`open_playback_session()`](/en/reference/api#api-runtime) demonstrates the high-level
+  entry point instead of the lower-level render path.
+- `load(...)` is separated from session creation so you can observe source-load
+  failures clearly.
+- Polling [`playback_state`](/en/reference/api#api-playback) makes the example useful for
+  both CLI verification and UI-oriented integration work.
+- The timeout in the full example keeps the sample from hanging forever on a
+  broken source.
+
+## How to adapt it
+
+Use this pattern when you want to:
+
+- build a player UI around state snapshots;
+- switch output devices through `select_output_device(...)`;
+- integrate built-in EQ through `equalizer_state()` and the EQ methods on
+  [`playback_session`](/en/reference/api#api-playback).
+
+## Run it
+
+```bat
+build\msvc-x64-debug\examples\Debug\sonotide_playback_session.exe "C:\Windows\Media\notify.wav"
+```

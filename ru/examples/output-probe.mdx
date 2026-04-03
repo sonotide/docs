@@ -1,0 +1,322 @@
+---
+title: "Проверка output-устройства"
+description: "Откройте render_stream на выбранном устройстве, посмотрите negotiated format и разберите lifecycle по шагам."
+---
+
+Этот сценарий полезен, когда в приложении есть экран настроек аудио и нужна
+надёжная кнопка "проверить звук именно на этом устройстве".
+
+В отличие от `sonotide_render_silence.exe`, этот walkthrough делает ещё четыре вещи:
+
+1. позволяет выбрать render-устройство по имени;
+2. привязывает поток именно к этому endpoint через `device_id`;
+3. печатает negotiated format после старта;
+4. показывает статистику жизненного цикла до и после запуска.
+
+## Полный код
+
+```cpp
+#include <algorithm>
+#include <chrono>
+#include <cctype>
+#include <cstddef>
+#include <cstdlib>
+#include <iostream>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <vector>
+
+#include "sonotide/runtime.h"
+
+namespace {
+
+std::string lowercase_ascii(std::string_view value) {
+    std::string copy(value);
+    std::transform(
+        copy.begin(),
+        copy.end(),
+        copy.begin(),
+        [](const unsigned char character) {
+            return static_cast<char>(std::tolower(character));
+        });
+    return copy;
+}
+
+bool contains_case_insensitive(std::string_view text, std::string_view query) {
+    return lowercase_ascii(text).find(lowercase_ascii(query)) != std::string::npos;
+}
+
+const char* sample_type_name(const sonotide::sample_type sample) {
+    switch (sample) {
+        case sonotide::sample_type::unknown:
+            return "unknown";
+        case sonotide::sample_type::pcm_i16:
+            return "pcm_i16";
+        case sonotide::sample_type::pcm_i24_in_32:
+            return "pcm_i24_in_32";
+        case sonotide::sample_type::pcm_i32:
+            return "pcm_i32";
+        case sonotide::sample_type::float32:
+            return "float32";
+    }
+
+    return "unknown";
+}
+
+void print_error(std::string_view stage, const sonotide::error& error) {
+    std::cerr << stage
+              << " failed | category=" << sonotide::to_string(error.category)
+              << " code=" << sonotide::to_string(error.code)
+              << " operation=" << error.operation
+              << " message=" << error.message
+              << '\n';
+}
+
+void print_status(std::string_view label, const sonotide::stream_status& status) {
+    std::cout << label
+              << " | callback_count=" << status.statistics.callback_count
+              << " frames_processed=" << status.statistics.frames_processed
+              << " device_lost=" << status.device_lost
+              << '\n';
+
+    if (status.negotiated_format.has_value()) {
+        const auto& format = *status.negotiated_format;
+        std::cout << "  negotiated_format"
+                  << " sample=" << sample_type_name(format.sample)
+                  << " sample_rate=" << format.sample_rate
+                  << " channels=" << format.channel_count
+                  << " bits_per_sample=" << format.bits_per_sample
+                  << '\n';
+    } else {
+        std::cout << "  negotiated_format ещё не доступен\n";
+    }
+}
+
+class silence_probe_callback final : public sonotide::render_callback {
+public:
+    sonotide::result<void> on_render(
+        sonotide::audio_buffer_view buffer,
+        sonotide::stream_timestamp) override {
+        std::fill(buffer.bytes.begin(), buffer.bytes.end(), std::byte{0});
+        return sonotide::result<void>::success();
+    }
+
+    void on_stream_error(const sonotide::error& stream_error) override {
+        print_error("async stream error", stream_error);
+    }
+};
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    if (argc < 2) {
+        std::cerr << "Usage: output_probe <device-name-substring>\n";
+        return 1;
+    }
+
+    const std::string_view device_query = argv[1];
+
+    auto runtime_result = sonotide::runtime::create();
+    if (!runtime_result) {
+        print_error("runtime::create", runtime_result.error());
+        return 1;
+    }
+
+    sonotide::runtime runtime = std::move(runtime_result.value());
+
+    auto devices_result = runtime.enumerate_devices(sonotide::device_direction::render);
+    if (!devices_result) {
+        print_error("enumerate_devices(render)", devices_result.error());
+        return 1;
+    }
+
+    std::optional<sonotide::device_info> selected_device;
+    for (const auto& device : devices_result.value()) {
+        if (device.state != sonotide::device_state::active) {
+            continue;
+        }
+
+        if (contains_case_insensitive(device.friendly_name, device_query)) {
+            selected_device = device;
+            break;
+        }
+    }
+
+    if (!selected_device.has_value()) {
+        std::cerr << "No active render device matched query: " << device_query << '\n';
+        return 1;
+    }
+
+    std::cout << "Selected device: " << selected_device->friendly_name << '\n';
+
+    silence_probe_callback callback;
+    sonotide::render_stream_config config;
+    config.device = sonotide::device_selector::explicit_id(
+        sonotide::device_direction::render,
+        selected_device->id);
+    config.format.preferred_sample = sonotide::sample_type::float32;
+    config.format.preferred_sample_rate = 48000;
+    config.format.preferred_channel_count = 2;
+    config.timing.target_latency = std::chrono::milliseconds(30);
+    config.prefill_with_silence = true;
+
+    auto stream_result = runtime.open_render_stream(config, callback);
+    if (!stream_result) {
+        print_error("open_render_stream", stream_result.error());
+        return 1;
+    }
+
+    sonotide::render_stream stream = std::move(stream_result.value());
+    print_status("before start", stream.status());
+
+    auto start_result = stream.start();
+    if (!start_result) {
+        print_error("render_stream::start", start_result.error());
+        return 1;
+    }
+
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    print_status("while running", stream.status());
+
+    auto stop_result = stream.stop();
+    if (!stop_result) {
+        print_error("render_stream::stop", stop_result.error());
+        return 1;
+    }
+
+    print_status("after stop", stream.status());
+
+    auto close_result = stream.close();
+    if (!close_result) {
+        print_error("render_stream::close", close_result.error());
+        return 1;
+    }
+
+    return 0;
+}
+```
+
+## Что происходит по шагам
+
+### 1. `runtime::create()` поднимает границу фреймворка
+
+Первый вызов — это всё тот же [`runtime::create()`](/ru/reference/api#api-runtime). Это
+точка входа, которая создаёт backend и возвращает стабильный объект для всей
+остальной работы.
+
+Если этот шаг падает, пример сразу завершается, потому что без валидного
+[`runtime`](/ru/reference/api#api-runtime) весь остальной аудиотракт бессмысленен.
+
+### 2. `enumerate_devices(render)` отдаёт безопасные для приложения метаданные endpoint-ов
+
+Дальше walkthrough вызывает
+`runtime.enumerate_devices(device_direction::render)` и ищет устройство по
+`friendly_name`.
+
+Это важно, потому что:
+
+- UI почти всегда начинает с читаемых для человека имён;
+- реальная привязка потока всё равно должна идти через стабильный `device_info.id`;
+- коду не нужно напрямую работать с COM-энумераторами и property store.
+
+Когда устройство найдено, пример сохраняет весь объект
+[`device_info`](/ru/reference/api#api-device-model), чтобы затем переиспользовать `id`.
+
+### 3. `device_selector::explicit_id(...)` заставляет Sonotide выбрать конкретный endpoint
+
+Ключевое отличие от более простых примеров — вот эта строка:
+
+```cpp
+config.device = sonotide::device_selector::explicit_id(
+    sonotide::device_direction::render,
+    selected_device->id);
+```
+
+Она говорит Sonotide не использовать текущее системное устройство по
+умолчанию, а открыть именно тот endpoint, который выбрал пользователь.
+
+Это правильный шаблон для:
+
+- кнопки "проверить этот динамик" в настройках;
+- диагностической утилиты для конкретного USB DAC;
+- плеера, который запоминает preferred output device.
+
+### 4. `format_request` задаёт предпочтения, а не жёсткий контракт
+
+Конфигурация просит:
+
+- `float32`
+- `48000`
+- `2` канала
+- `30 ms` latency
+
+Это всего лишь пожелания внутри [`format_request`](/ru/reference/api#api-audio-format), а
+не обещание, что устройство поднимется именно в таком виде. Backend попытается
+согласовать эти параметры, а если fallback разрешён, может выбрать другой
+поддерживаемый формат.
+
+Именно поэтому пример печатает `stream.status().negotiated_format`, а не
+исходит из того, что запрос всегда побеждает без изменений.
+
+### 5. Callback намеренно оставлен максимально скучным
+
+`silence_probe_callback::on_render(...)` просто заполняет буфер нулями.
+
+Это не потому, что реальное приложение должно всегда играть тишину. Просто в
+этом кейсе задача — проверить привязку к устройству и lifecycle. Тихий callback
+убирает из уравнения декодер, DSP и преобразование сэмплов, поэтому можно
+сосредоточиться именно на render path.
+
+### 6. `start()` — важная точка синхронизации
+
+`stream.start()` — это место, где поток реально переходит из состояния
+"открыт" в состояние "работает".
+
+В Sonotide это важный вызов, потому что он не просто меняет флаг. Он ждёт,
+пока worker thread и backend startup sequence либо:
+
+- успешно запустятся и войдут в render loop; либо
+- завершатся структурированной [`error`](/ru/reference/api#api-errors).
+
+Поэтому именно `start()` — хорошая точка, чтобы показывать пользователю
+осмысленную диагностику.
+
+### 7. `status()` — это источник правды во время работы и после неё
+
+Пример печатает три снимка:
+
+- до `start()`;
+- во время активной работы;
+- после `stop()`.
+
+Эти снимки показывают:
+
+- завершился ли negotiation формата;
+- сколько было callback-вызовов;
+- сколько кадров обработал worker;
+- терялось ли устройство по дороге.
+
+Это гораздо полезнее, чем считать успехом просто факт отсутствия исключения.
+
+### 8. `stop()` и `close()` разделены специально
+
+Walkthrough вызывает и `stop()`, и `close()`.
+
+У них разные роли:
+
+- `stop()` завершает активный worker loop и оставляет вам чистое stopped-состояние;
+- `close()` окончательно освобождает внутренний handle.
+
+Такое разделение полезно в приложениях, где нужно сначала посмотреть финальный
+[`stream_status`](/ru/reference/api#api-streams), а уже потом решать, вызывать `reset()`
+или уничтожать поток.
+
+## Когда брать этот паттерн за основу
+
+Используйте этот кейс, если вам нужны:
+
+- диагностическая команда по устройству;
+- per-device "test output" в настройках;
+- место, где можно логировать negotiated format и stream statistics в support-репорт.

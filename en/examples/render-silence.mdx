@@ -1,0 +1,62 @@
+---
+title: "Render silence"
+description: "Use the minimal render example to validate the output path without adding your own decoder or DSP."
+---
+
+Use this example when you want to validate the output path without introducing
+your own decoder, DSP chain, or test tone generation.
+
+## What the example does
+
+1. Creates [`runtime`](/en/reference/api#api-runtime).
+2. Builds a minimal [`render_callback`](/en/reference/api#api-streams).
+3. Opens a [`render_stream`](/en/reference/api#api-streams) with default config.
+4. Starts the stream and exits successfully if the critical render path works.
+
+## Key code
+
+```cpp
+class silence_callback final : public sonotide::render_callback {
+public:
+    sonotide::result<void> on_render(
+        sonotide::audio_buffer_view buffer,
+        sonotide::stream_timestamp) override {
+        std::fill(buffer.bytes.begin(), buffer.bytes.end(), std::byte{0});
+        return sonotide::result<void>::success();
+    }
+};
+
+sonotide::render_stream_config config;
+auto stream_result = audio_runtime.open_render_stream(config, callback);
+if (!stream_result) {
+    std::cerr << stream_result.error().message << '\n';
+    return 1;
+}
+
+auto start_result = stream_result.value().start();
+if (!start_result) {
+    std::cerr << start_result.error().message << '\n';
+    return 1;
+}
+```
+
+## Why it is written this way
+
+- The callback writes zeros into [`audio_buffer_view`](/en/reference/api#api-audio-format),
+  which keeps the example deterministic and silent.
+- [`render_stream_config`](/en/reference/api#api-streams) uses the default path on
+  purpose, so the sample is a clean validation of the framework defaults.
+- A successful `start()` confirms that device selection, format negotiation,
+  worker-thread setup, and the callback path all came up correctly.
+
+## How to adapt it
+
+This is the right starting point when your application already owns decoded PCM.
+Replace the zero-fill block with code that copies your prepared frames into
+`buffer.bytes`.
+
+## Run it
+
+```bat
+build\msvc-x64-debug\examples\Debug\sonotide_render_silence.exe
+```

@@ -1,0 +1,61 @@
+---
+title: "Список устройств"
+description: "Используйте готовый пример перечисления устройств, чтобы посмотреть render-endpoint-ы и default-флаги."
+---
+
+Этот пример полезен, когда нужно убедиться, что Sonotide видит Windows
+аудиостек и возвращает стабильные метаданные endpoint-ов.
+
+## Что делает пример
+
+1. Создаёт [`runtime`](/ru/reference/api#api-runtime).
+2. Вызывает `enumerate_devices(device_direction::render)`.
+3. Печатает `id`, `friendly_name` и флаг устройства по умолчанию.
+
+## Ключевой код
+
+```cpp
+auto runtime_result = sonotide::runtime::create();
+if (!runtime_result) {
+    std::cerr << runtime_result.error().message << '\n';
+    return 1;
+}
+
+sonotide::runtime audio_runtime = std::move(runtime_result.value());
+auto devices_result = audio_runtime.enumerate_devices(sonotide::device_direction::render);
+if (!devices_result) {
+    std::cerr << devices_result.error().message << '\n';
+    return 1;
+}
+
+for (const auto& device : devices_result.value()) {
+    std::cout << device.id << " | " << device.friendly_name;
+    if (device.is_default_multimedia) {
+        std::cout << " | default multimedia";
+    }
+    std::cout << '\n';
+}
+```
+
+## Почему он устроен именно так
+
+- [`runtime::create()`](/ru/reference/api#api-runtime) задаёт границу фреймворка. Если
+  он не поднялся, пример сразу печатает структурную ошибку и завершается.
+- [`device_info`](/ru/reference/api#api-device-model) уже достаточно для application code.
+  Пример не лезет в COM-интерфейсы.
+- Печать default-флага делает пример полезным не только как smoke test, но и
+  как заготовку для UI выбора устройства.
+
+## Как адаптировать под свой код
+
+Этот шаблон подходит, если вам нужны:
+
+- выбор устройства вывода в настройках;
+- диагностическая команда, которая печатает endpoint-ы;
+- первый шаг миграции с прямого `IMMDeviceEnumerator`.
+
+## Запуск
+
+```bat
+build\msvc-x64-debug\examples\Debug\sonotide_list_devices.exe
+```

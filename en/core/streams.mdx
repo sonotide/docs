@@ -7,13 +7,13 @@ Sonotide abstracts the complexity of WASAPI by providing three distinct stream f
 
 <CardGroup cols={3}>
   <Card title="Render" icon="volume-high">
-    [`render_stream`](/en/api#api-streams) sends PCM data to output devices (speakers, headphones).
+    [`render_stream`](/en/reference/api#api-streams) sends PCM data to output devices (speakers, headphones).
   </Card>
   <Card title="Capture" icon="microphone">
-    [`capture_stream`](/en/api#api-streams) receives PCM data from input devices (microphones).
+    [`capture_stream`](/en/reference/api#api-streams) receives PCM data from input devices (microphones).
   </Card>
   <Card title="Loopback" icon="laptop-code">
-    [`loopback_capture_stream`](/en/api#api-streams) grabs system audio currently playing on an endpoint.
+    [`loopback_capture_stream`](/en/reference/api#api-streams) grabs system audio currently playing on an endpoint.
   </Card>
 </CardGroup>
 
@@ -66,7 +66,7 @@ Sonotide handles the threading, you handle the byte-filling.
 
 ## Monitoring the Truth
 
-Instead of querying COM properties, just ask for the [`stream_status`](/en/api#api-streams):
+Instead of querying COM properties, just ask for the [`stream_status`](/en/reference/api#api-streams):
 
 ```cpp
 auto status = my_stream.status();

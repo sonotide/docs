@@ -1,0 +1,57 @@
+---
+title: "Обзор примеров"
+description: "Навигационная страница по примерам Sonotide, где каждый сценарий вынесен в отдельный пункт."
+---
+
+## Почему этот раздел теперь разбит
+
+Теперь у каждого примера Sonotide есть отдельная страница. Так боковое меню
+работает удобнее: можно сразу перейти к нужному сценарию, а не прокручивать
+один большой документ.
+
+Примеры здесь делятся на две группы:
+
+- готовые исполняемые примеры из репозитория фреймворка;
+- более полные walkthrough-сценарии, которые показывают application-level
+  интеграцию вне папки `examples/`.
+
+## Готовые примеры
+
+<CardGroup cols={3}>
+  <Card title="Список устройств" icon="list" href="/ru/examples/list-devices">
+    Поиск endpoint-ов через `runtime` и `enumerate_devices(...)`.
+  </Card>
+  <Card title="Вывод тишины" icon="volume-low" href="/ru/examples/render-silence">
+    Самый маленький безопасный render path с минимальным callback.
+  </Card>
+  <Card title="Сессия воспроизведения" icon="play" href="/ru/examples/playback-session">
+    High-level playback, загрузка источника, polling и transport state.
+  </Card>
+</CardGroup>
+
+## Walkthrough-кейсы
+
+<CardGroup cols={2}>
+  <Card title="Проверка output-устройства" icon="speaker-simple-high" href="/ru/examples/output-probe">
+    Открыть поток на конкретном устройстве, посмотреть negotiated format и lifecycle status.
+  </Card>
+  <Card title="Плеер spoken-word" icon="waveform" href="/ru/examples/spoken-player">
+    Построить небольшой player workflow вокруг `playback_session`, routing, EQ и polling state.
+  </Card>
+</CardGroup>
+
+## Запуск готовых примеров из WSL
+
+```bash
+cmd.exe /c build\\msvc-x64-debug\\examples\\Debug\\sonotide_list_devices.exe
+cmd.exe /c build\\msvc-x64-debug\\examples\\Debug\\sonotide_render_silence.exe
+cmd.exe /c "build\\msvc-x64-debug\\examples\\Debug\\sonotide_playback_session.exe C:\\Windows\\Media\\notify.wav"
+```
+
+## С чего начать
+
+- Начинайте со [Списка устройств](/ru/examples/list-devices), если хотите проверить границу `runtime` и метаданные endpoint-ов.
+- Начинайте с [Вывода тишины](/ru/examples/render-silence), если у вас уже есть PCM и нужен только output path.
+- Начинайте с [Сессии воспроизведения](/ru/examples/playback-session), если нужен готовый playback workflow внутри фреймворка.
+- Начинайте с [Проверки output-устройства](/ru/examples/output-probe), если приложение должно валидировать конкретный endpoint.
+- Начинайте с [Плеера spoken-word](/ru/examples/spoken-player), если вы строите небольшой player вокруг `playback_state`.

@@ -3,13 +3,13 @@ title: "Контекст Runtime"
 description: "Как объект runtime задаёт границу инфраструктуры аудио, ищет подключенные устройства и генерирует потоки."
 ---
 
-[`runtime`](/ru/api#api-runtime) — это фундамент Sonotide. Это тот самый объект, который переводит библиотеку из состояния "просто набор заголовочных файлов" в работающую аудиосистему ОС.
+[`runtime`](/ru/reference/api#api-runtime) — это фундамент Sonotide. Это тот самый объект, который переводит библиотеку из состояния "просто набор заголовочных файлов" в работающую аудиосистему ОС.
 
 Он берёт на себя владение платформенным бекендом, предоставляет интерфейсы для поиска оборудования и выступает в роли "фабрики" для создания потоков. Если вы внедряете Sonotide в свой проект, `runtime` — это первое, с чем вы столкнётесь.
 
 ## 1. Инициализация фреймворка
 
-Структура [`runtime_options`](/ru/api#api-runtime) определяет поведение системы в момент старта:
+Структура [`runtime_options`](/ru/reference/api#api-runtime) определяет поведение системы в момент старта:
 - `initialize_media_foundation`: Активирует подсистему Media Foundation (нужна для декодирования файлов).
 - `enable_mmcss`: Включает MMCSS, чтобы дать рабочим потокам аудио приоритет реального времени в планировщике Windows.
 
@@ -29,9 +29,9 @@ sonotide::runtime runtime = std::move(runtime_result.value());
 
 ## 2. Поиск устройств (Endpoint Discovery)
 
-Вместо того чтобы заставлять вас работать с COM-интерфейсами `IMMDevice` и `IMMDeviceCollection`, Sonotide предлагает чистый и безопасный C++ API: [`enumerate_devices(direction)`](/ru/api#api-runtime) и [`default_device(direction, role)`](/ru/api#api-runtime).
+Вместо того чтобы заставлять вас работать с COM-интерфейсами `IMMDevice` и `IMMDeviceCollection`, Sonotide предлагает чистый и безопасный C++ API: [`enumerate_devices(direction)`](/ru/reference/api#api-runtime) и [`default_device(direction, role)`](/ru/reference/api#api-runtime).
 
-В ответ вы получаете простые структуры [`device_info`](/ru/api#api-device-model):
+В ответ вы получаете простые структуры [`device_info`](/ru/reference/api#api-device-model):
 
 ```cpp
 auto devices_result = runtime.enumerate_devices(sonotide::device_direction::render);
@@ -73,5 +73,5 @@ if (devices_result) {
 - Вы переписываете старый legacy WASAPI код на Sonotide небольшими итерациями.
 
 <Note>
-Но если всё, что вам нужно — это включить `.mp3` с возможностью паузы и настройки громкости, игнорируйте потоки и сразу используйте высокоуровневую [`playback_session`](/ru/api#api-playback).
+Но если всё, что вам нужно — это включить `.mp3` с возможностью паузы и настройки громкости, игнорируйте потоки и сразу используйте высокоуровневую [`playback_session`](/ru/reference/api#api-playback).
 </Note>

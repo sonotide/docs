@@ -9,7 +9,7 @@ Handling bare `render_stream` chunks of PCM data is great for raw audio processi
 - Control Master Volume and EQ.
 - Seamlessly transition between output devices exactly when the user plugs in headphones.
 
-Instead of forcing you to build these common features from scratch around the raw stream API, Sonotide provides the [`playback_session`](/en/api#api-playback).
+Instead of forcing you to build these common features from scratch around the raw stream API, Sonotide provides the [`playback_session`](/en/reference/api#api-playback).
 
 ## 1. Setting up the Session
 
@@ -61,7 +61,7 @@ session.select_output_device(headphones_id);
 
 ## 4. Querying Playback State
 
-You don't need to register complicated event listeners just to update a UI progress bar. Instead, call `session.state()` on a standard UI timer to poll the structured [`playback_state`](/en/api#api-playback) snapshot.
+You don't need to register complicated event listeners just to update a UI progress bar. Instead, call `session.state()` on a standard UI timer to poll the structured [`playback_state`](/en/reference/api#api-playback) snapshot.
 
 This model allows React/Vue style state-driven UIs to simply pull the truth:
 - `status`: Is it `Playing`, `Paused`, or `Failed`?

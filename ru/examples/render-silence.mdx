@@ -1,0 +1,62 @@
+---
+title: "Вывод тишины"
+description: "Используйте минимальный render-пример, чтобы проверить output path без собственного декодера или DSP."
+---
+
+Этот пример нужен, когда вы хотите проверить output path без собственного
+декодера, DSP-цепочки или генератора тестового сигнала.
+
+## Что делает пример
+
+1. Создаёт [`runtime`](/ru/reference/api#api-runtime).
+2. Объявляет минимальный [`render_callback`](/ru/reference/api#api-streams).
+3. Открывает [`render_stream`](/ru/reference/api#api-streams) с конфигурацией по умолчанию.
+4. Запускает поток и завершается успешно, если критический render path поднялся.
+
+## Ключевой код
+
+```cpp
+class silence_callback final : public sonotide::render_callback {
+public:
+    sonotide::result<void> on_render(
+        sonotide::audio_buffer_view buffer,
+        sonotide::stream_timestamp) override {
+        std::fill(buffer.bytes.begin(), buffer.bytes.end(), std::byte{0});
+        return sonotide::result<void>::success();
+    }
+};
+
+sonotide::render_stream_config config;
+auto stream_result = audio_runtime.open_render_stream(config, callback);
+if (!stream_result) {
+    std::cerr << stream_result.error().message << '\n';
+    return 1;
+}
+
+auto start_result = stream_result.value().start();
+if (!start_result) {
+    std::cerr << start_result.error().message << '\n';
+    return 1;
+}
+```
+
+## Почему он устроен именно так
+
+- Callback пишет нули в [`audio_buffer_view`](/ru/reference/api#api-audio-format), поэтому
+  пример детерминированный и не создаёт слышимого сигнала.
+- [`render_stream_config`](/ru/reference/api#api-streams) намеренно остаётся в дефолтном
+  виде, чтобы пример проверял именно стандартный путь фреймворка.
+- Успешный `start()` подтверждает, что выбор устройства, negotiation формата,
+  запуск worker thread и callback path уже работают корректно.
+
+## Как адаптировать под свой код
+
+Это правильная отправная точка, если приложение уже владеет декодированным PCM.
+Вместо заполнения нулями вставьте копирование ваших подготовленных кадров в
+`buffer.bytes`.
+
+## Запуск
+
+```bat
+build\msvc-x64-debug\examples\Debug\sonotide_render_silence.exe
+```

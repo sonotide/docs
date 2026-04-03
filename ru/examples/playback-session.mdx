@@ -1,0 +1,69 @@
+---
+title: "Сессия воспроизведения"
+description: "Используйте готовый пример playback_session, чтобы загрузить источник, читать transport state и наблюдать завершение."
+---
+
+Этот пример показывает high-level playback layer в реальной работе: загрузку,
+playback state, transport progress и завершение источника.
+
+## Что делает пример
+
+1. Создаёт [`runtime`](/ru/reference/api#api-runtime).
+2. Открывает [`playback_session`](/ru/reference/api#api-playback).
+3. Загружает локальный файл или URI.
+4. Опросом читает [`playback_state`](/ru/reference/api#api-playback), пока воспроизведение не завершится или не упадёт в ошибку.
+
+## Ключевой код
+
+```cpp
+auto session_result = audio_runtime.open_playback_session();
+if (!session_result) {
+    std::cerr << session_result.error().message << '\n';
+    return 1;
+}
+
+auto load_result = session_result.value().load(argv[1]);
+if (!load_result) {
+    std::cerr << load_result.error().message << '\n';
+    return 1;
+}
+
+while (true) {
+    const auto state = session_result.value().state();
+    std::cout << "status=" << static_cast<int>(state.status)
+              << " position_ms=" << state.position_ms
+              << " duration_ms=" << state.duration_ms << '\n';
+
+    if (state.status == sonotide::playback_status::idle ||
+        state.status == sonotide::playback_status::error) {
+        break;
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+}
+```
+
+## Почему он устроен именно так
+
+- [`open_playback_session()`](/ru/reference/api#api-runtime) показывает вход именно в
+  high-level слой, а не только в render path.
+- `load(...)` вынесен отдельно от создания сессии, чтобы ошибки загрузки были
+  видны сразу и не смешивались с ошибками инициализации.
+- Опрос [`playback_state`](/ru/reference/api#api-playback) делает пример полезным и как
+  CLI smoke test, и как основу для UI-интеграции.
+- Таймаут в полном исходнике не даёт примеру зависнуть навсегда на проблемном источнике.
+
+## Как адаптировать под свой код
+
+Используйте этот шаблон, если нужно:
+
+- строить player UI вокруг state snapshot-ов;
+- переключать output device через `select_output_device(...)`;
+- подключать встроенный EQ через `equalizer_state()` и методы
+  [`playback_session`](/ru/reference/api#api-playback).
+
+## Запуск
+
+```bat
+build\msvc-x64-debug\examples\Debug\sonotide_playback_session.exe "C:\Windows\Media\notify.wav"
+```

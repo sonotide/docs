@@ -9,7 +9,7 @@ When working with Windows audio, it's easy to get lost in the weeds of COM. Sono
 
 The most important idea in Sonotide is that your application integrates with the **framework boundary**, not with raw COM objects.
 
-You start with the [`runtime`](/en/api#api-runtime), describe what you want using configurations, and monitor the state using snapshots like [`stream_status`](/en/api#api-streams).
+You start with the [`runtime`](/en/reference/api#api-runtime), describe what you want using configurations, and monitor the state using snapshots like [`stream_status`](/en/reference/api#api-streams).
 
 <CardGroup cols={2}>
   <Card title="What Sonotide Owns" icon="shield-check">
@@ -45,12 +45,12 @@ Audio processing shouldn't happen magically in the background. Sonotide makes th
 
 While streams give you raw bytes, many apps need more: loading files, route switching, seeking, volume control, and EQ.
 
-That's why Sonotide provides the [`playback_session`](/en/api#api-playback). 
+That's why Sonotide provides the [`playback_session`](/en/reference/api#api-playback). 
 It doesn't replace the runtime model; it builds on top of it. It acts as a powerful orchestrator so you don't have to reinvent the wheel for standard playback scenarios.
 
 ## 4. Modern Error Handling
 
-Forget about throwing exceptions in the audio hot path. Sonotide returns a [`result<T>`](/en/api#api-error-result) for almost every operation.
+Forget about throwing exceptions in the audio hot path. Sonotide returns a [`result<T>`](/en/reference/api#api-error-result) for almost every operation.
 
 ```cpp
 auto runtime_result = sonotide::runtime::create();

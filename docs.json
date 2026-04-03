@@ -37,7 +37,7 @@
           "primary": {
             "type": "button",
             "label": "Quickstart",
-            "href": "/en/getting-started"
+            "href": "/en/start/getting-started"
           }
         },
         "footer": {
@@ -54,11 +54,11 @@
                 },
                 {
                   "label": "Quickstart",
-                  "href": "/en/getting-started"
+                  "href": "/en/start/getting-started"
                 },
                 {
                   "label": "API reference",
-                  "href": "/en/api"
+                  "href": "/en/reference/api"
                 }
               ]
             },
@@ -85,26 +85,26 @@
                 "group": "Start here",
                 "pages": [
                   "en/index",
-                  "en/getting-started",
-                  "en/build"
+                  "en/start/getting-started",
+                  "en/start/build"
                 ]
               },
               {
                 "group": "Core concepts",
                 "pages": [
-                  "en/concepts",
-                  "en/architecture",
-                  "en/runtime",
-                  "en/streams",
-                  "en/playback",
-                  "en/equalizer"
+                  "en/core/concepts",
+                  "en/core/architecture",
+                  "en/core/runtime",
+                  "en/core/streams",
+                  "en/core/playback",
+                  "en/core/equalizer"
                 ]
               },
               {
                 "group": "Migration and diagnostics",
                 "pages": [
-                  "en/migration",
-                  "en/troubleshooting"
+                  "en/guides/migration",
+                  "en/guides/troubleshooting"
                 ]
               }
             ]
@@ -115,13 +115,18 @@
               {
                 "group": "API surface",
                 "pages": [
-                  "en/api"
+                  "en/reference/api"
                 ]
               },
               {
                 "group": "Examples",
                 "pages": [
-                  "en/examples"
+                  "en/examples/overview",
+                  "en/examples/list-devices",
+                  "en/examples/render-silence",
+                  "en/examples/playback-session",
+                  "en/examples/output-probe",
+                  "en/examples/spoken-player"
                 ]
               }
             ]
@@ -144,7 +149,7 @@
           "primary": {
             "type": "button",
             "label": "Быстрый старт",
-            "href": "/ru/getting-started"
+            "href": "/ru/start/getting-started"
           }
         },
         "footer": {
@@ -161,11 +166,11 @@
                 },
                 {
                   "label": "Быстрый старт",
-                  "href": "/ru/getting-started"
+                  "href": "/ru/start/getting-started"
                 },
                 {
                   "label": "Справка API",
-                  "href": "/ru/api"
+                  "href": "/ru/reference/api"
                 }
               ]
             },
@@ -192,26 +197,26 @@
                 "group": "Сначала сюда",
                 "pages": [
                   "ru/index",
-                  "ru/getting-started",
-                  "ru/build"
+                  "ru/start/getting-started",
+                  "ru/start/build"
                 ]
               },
               {
                 "group": "Ключевые концепции",
                 "pages": [
-                  "ru/concepts",
-                  "ru/architecture",
-                  "ru/runtime",
-                  "ru/streams",
-                  "ru/playback",
-                  "ru/equalizer"
+                  "ru/core/concepts",
+                  "ru/core/architecture",
+                  "ru/core/runtime",
+                  "ru/core/streams",
+                  "ru/core/playback",
+                  "ru/core/equalizer"
                 ]
               },
               {
                 "group": "Миграция и диагностика",
                 "pages": [
-                  "ru/migration",
-                  "ru/troubleshooting"
+                  "ru/guides/migration",
+                  "ru/guides/troubleshooting"
                 ]
               }
             ]
@@ -222,13 +227,18 @@
               {
                 "group": "API",
                 "pages": [
-                  "ru/api"
+                  "ru/reference/api"
                 ]
               },
               {
                 "group": "Примеры",
                 "pages": [
-                  "ru/examples"
+                  "ru/examples/overview",
+                  "ru/examples/list-devices",
+                  "ru/examples/render-silence",
+                  "ru/examples/playback-session",
+                  "ru/examples/output-probe",
+                  "ru/examples/spoken-player"
                 ]
               }
             ]

@@ -6,6 +6,7 @@ This repository contains the Mintlify site for the Sonotide framework.
 
 - `docs.json` for global site configuration;
 - localized content under `en/` and `ru/`;
+- section folders inside each locale: `start/`, `core/`, `guides/`, `reference/`, and `examples/`;
 - branding assets in `logo/`, `favicon.svg`, and optional `images/`;
 - styling in `styles.css` and optional `scripts.js`.
 

@@ -3,13 +3,13 @@ title: "Runtime Context"
 description: "How the runtime defines the framework boundary, enumerates devices, and acts as a factory for streams."
 ---
 
-The [`runtime`](/en/api#api-runtime) is the foundational object in Sonotide. It transforms a collection of C++ headers into a living, breathing audio system. 
+The [`runtime`](/en/reference/api#api-runtime) is the foundational object in Sonotide. It transforms a collection of C++ headers into a living, breathing audio system. 
 
 It holds ownership of the platform backend, exposes hardware device discovery, and acts as the factory for creating streams and playback sessions. If you're dropping Sonotide into an existing codebase, the `runtime` is the very first type you will interact with.
 
 ## 1. Initializing the Boundary
 
-The [`runtime_options`](/en/api#api-runtime) structure defines what happens during the bootup phase:
+The [`runtime_options`](/en/reference/api#api-runtime) structure defines what happens during the bootup phase:
 - `initialize_media_foundation`: Bootstraps the MF platform (required for playback decoding).
 - `enable_mmcss`: Enables Multimedia Class Scheduler Service to give worker threads real-time priority.
 
@@ -29,9 +29,9 @@ sonotide::runtime runtime = std::move(runtime_result.value());
 
 ## 2. Discovering Hardware
 
-Device enumeration is exposed safely via [`enumerate_devices(direction)`](/en/api#api-runtime) and [`default_device(direction, role)`](/en/api#api-runtime). 
+Device enumeration is exposed safely via [`enumerate_devices(direction)`](/en/reference/api#api-runtime) and [`default_device(direction, role)`](/en/reference/api#api-runtime). 
 
-Instead of dealing with opaque COM `IMMDevice` pointers, Sonotide returns clean, standard [`device_info`](/en/api#api-device-model) structs:
+Instead of dealing with opaque COM `IMMDevice` pointers, Sonotide returns clean, standard [`device_info`](/en/reference/api#api-device-model) structs:
 
 ```cpp
 auto devices_result = runtime.enumerate_devices(sonotide::device_direction::render);
@@ -73,5 +73,5 @@ Should you use raw streams or jump straight to a `playback_session`?
 - You are migrating away from an older raw WASAPI implementation step-by-step.
 
 <Note>
-If you want to play a `.mp3` or `.wav` file with pause, seek, and volume control, skip the raw streams and use a [`playback_session`](/en/api#api-playback) instead.
+If you want to play a `.mp3` or `.wav` file with pause, seek, and volume control, skip the raw streams and use a [`playback_session`](/en/reference/api#api-playback) instead.
 </Note>

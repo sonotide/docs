@@ -1,0 +1,324 @@
+---
+title: "Плеер spoken-word"
+description: "Постройте небольшой player workflow вокруг playback_session, выбора устройства, EQ и polling state."
+---
+
+Этот сценарий показывает, как небольшой playback workflow может почти целиком
+жить внутри [`playback_session`](/ru/reference/api#api-playback).
+
+Идея намеренно практичная: представьте плеер для подкастов или spoken-word
+контента, которому нужно:
+
+- загрузить один источник;
+- при желании вывести звук на конкретное устройство;
+- включить встроенный EQ-пресет для разборчивой речи;
+- опрашивать state для CLI или UI прогресса;
+- сделать seek после старта.
+
+## Полный код
+
+```cpp
+#include <chrono>
+#include <cstdint>
+#include <iostream>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <vector>
+
+#include "sonotide/runtime.h"
+
+namespace {
+
+void print_error(std::string_view stage, const sonotide::error& error) {
+    std::cerr << stage
+              << " failed | category=" << sonotide::to_string(error.category)
+              << " code=" << sonotide::to_string(error.code)
+              << " operation=" << error.operation
+              << " message=" << error.message
+              << '\n';
+}
+
+const char* playback_status_name(const sonotide::playback_status status) {
+    switch (status) {
+        case sonotide::playback_status::idle:
+            return "idle";
+        case sonotide::playback_status::loading:
+            return "loading";
+        case sonotide::playback_status::playing:
+            return "playing";
+        case sonotide::playback_status::paused:
+            return "paused";
+        case sonotide::playback_status::error:
+            return "error";
+    }
+
+    return "error";
+}
+
+std::optional<sonotide::device_info> find_output_by_name(
+    const std::vector<sonotide::device_info>& devices,
+    std::string_view query) {
+    for (const auto& device : devices) {
+        if (device.friendly_name.find(query) != std::string::npos) {
+            return device;
+        }
+    }
+
+    return std::nullopt;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    if (argc < 2) {
+        std::cerr << "Usage: spoken_player <source-uri> [output-name-substring]\n";
+        return 1;
+    }
+
+    const std::string source_uri = argv[1];
+    const std::optional<std::string> preferred_output =
+        argc >= 3 ? std::optional<std::string>(argv[2]) : std::nullopt;
+
+    auto runtime_result = sonotide::runtime::create();
+    if (!runtime_result) {
+        print_error("runtime::create", runtime_result.error());
+        return 1;
+    }
+
+    sonotide::runtime runtime = std::move(runtime_result.value());
+
+    sonotide::playback_session_config config;
+    config.auto_play_on_load = false;
+    config.initial_volume_percent = 70;
+    config.render.timing.target_latency = std::chrono::milliseconds(40);
+    config.render.prefill_with_silence = true;
+
+    auto session_result = runtime.open_playback_session(config);
+    if (!session_result) {
+        print_error("open_playback_session", session_result.error());
+        return 1;
+    }
+
+    sonotide::playback_session session = std::move(session_result.value());
+
+    if (preferred_output.has_value()) {
+        auto outputs_result = session.list_output_devices();
+        if (!outputs_result) {
+            print_error("list_output_devices", outputs_result.error());
+            return 1;
+        }
+
+        auto selected_output = find_output_by_name(outputs_result.value(), *preferred_output);
+        if (!selected_output.has_value()) {
+            std::cerr << "No output matched query: " << *preferred_output << '\n';
+            return 1;
+        }
+
+        auto route_result = session.select_output_device(selected_output->id);
+        if (!route_result) {
+            print_error("select_output_device", route_result.error());
+            return 1;
+        }
+    }
+
+    auto load_result = session.load(source_uri);
+    if (!load_result) {
+        print_error("playback_session::load", load_result.error());
+        return 1;
+    }
+
+    auto eq_enable_result = session.set_equalizer_enabled(true);
+    if (!eq_enable_result) {
+        print_error("set_equalizer_enabled", eq_enable_result.error());
+        return 1;
+    }
+
+    auto eq_preset_result =
+        session.select_equalizer_preset(sonotide::equalizer_preset_id::spoken_podcast);
+    if (!eq_preset_result) {
+        print_error("select_equalizer_preset", eq_preset_result.error());
+        return 1;
+    }
+
+    const auto eq_state = session.equalizer_state();
+    std::cout << "EQ status=" << sonotide::to_string(eq_state.status)
+              << " preset=" << sonotide::to_string(eq_state.active_preset_id)
+              << '\n';
+
+    auto play_result = session.play();
+    if (!play_result) {
+        print_error("playback_session::play", play_result.error());
+        return 1;
+    }
+
+    bool seek_was_issued = false;
+    while (true) {
+        const auto state = session.state();
+        std::cout << "status=" << playback_status_name(state.status)
+                  << " position_ms=" << state.position_ms
+                  << " duration_ms=" << state.duration_ms
+                  << " volume_percent=" << state.volume_percent
+                  << " active_output=" << state.active_output_device_name
+                  << '\n';
+
+        if (!seek_was_issued &&
+            state.status == sonotide::playback_status::playing &&
+            state.duration_ms > 30000 &&
+            state.position_ms > 5000) {
+            auto seek_result = session.seek_to(30000);
+            if (!seek_result) {
+                print_error("playback_session::seek_to", seek_result.error());
+                return 1;
+            }
+
+            seek_was_issued = true;
+        }
+
+        if (state.status == sonotide::playback_status::idle) {
+            break;
+        }
+
+        if (state.status == sonotide::playback_status::error) {
+            std::cerr << "Playback failed: " << state.error_message << '\n';
+            return 1;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    }
+
+    auto close_result = session.close();
+    if (!close_result) {
+        print_error("playback_session::close", close_result.error());
+        return 1;
+    }
+
+    return 0;
+}
+```
+
+## Что происходит по шагам
+
+### 1. Конфигурация сессии заранее задаёт политику плеера
+
+Этот кейс начинается с
+[`playback_session_config`](/ru/reference/api#api-playback), а не с raw stream config.
+
+Это важно, потому что код описывает поведение плеера, а не только transport plumbing:
+
+- `auto_play_on_load = false` разделяет загрузку и фактический старт воспроизведения;
+- `initial_volume_percent = 70` даёт предсказуемую стартовую громкость;
+- `render.timing.target_latency` всё ещё прокидывается вниз, в underlying render path.
+
+Иными словами, конфиг сессии позволяет задавать одновременно и player semantics,
+и низкоуровневое поведение output layer.
+
+### 2. `open_playback_session()` даёт более высокий уровень абстракции
+
+[`runtime::open_playback_session()`](/ru/reference/api#api-runtime) создаёт объект,
+который уже умеет работать с:
+
+- загрузкой источника;
+- настройкой декодера;
+- transport state;
+- маршрутизацией output device;
+- состоянием эквалайзера.
+
+Поэтому этот пример **не** реализует собственный `render_callback`.
+[`playback_session`](/ru/reference/api#api-playback) находится над stream layer и берёт
+эту сложность на себя.
+
+### 3. `list_output_devices()` и `select_output_device(...)` остаются внутри сессии
+
+Если пользователь передал подстроку имени устройства, walkthrough просит у
+сессии список текущих output-устройств и затем вызывает
+`select_output_device(...)`.
+
+Это полезно, потому что в данном сценарии routing — часть player workflow.
+Коду не нужна отдельная subsystem настроек только для того, чтобы увести звук
+с колонок в наушники.
+
+Обратите внимание на форму логики:
+
+- сначала devices разрешаются в стабильные IDs;
+- затем нужное устройство выбирается по читаемому имени;
+- назад в сессию уходит только `id`.
+
+Такой паттерн хорошо разделяет UI-метки и backend-идентификаторы.
+
+### 4. `load(...)` подготавливает источник, но не форсирует playback
+
+Walkthrough сначала загружает URI, а уже потом включает EQ и стартует transport.
+
+Это сделано специально:
+
+- `load(...)` может упасть, потому что путь неверный, формат не поддержан или декодер не открыл источник;
+- `play()` может упасть по другим причинам, связанным уже с transport или output state.
+
+Разделение этих операций делает и диагностику, и UI-поведение намного чище.
+
+### 5. Эквалайзер настраивается как часть player state, а не как внешняя DSP-цепочка
+
+Ключевой блок здесь такой:
+
+```cpp
+session.set_equalizer_enabled(true);
+session.select_equalizer_preset(sonotide::equalizer_preset_id::spoken_podcast);
+```
+
+Он говорит Sonotide активировать встроенный EQ path и выбрать пресет,
+ориентированный на разборчивость речи.
+
+Сразу после этого код читает `session.equalizer_state()` и печатает:
+
+- текущий статус готовности EQ;
+- токен активного пресета.
+
+Это правильная привычка и для UI. Вместо предположения, что EQ точно готов,
+лучше читать state snapshot и отображать то, что сессия реально приняла.
+
+### 6. `state()` — это polling-модель для CLI и UI
+
+Внутри цикла пример каждые 250 ms вызывает `session.state()`.
+
+Этот snapshot работает как truth model плеера:
+
+- `status` показывает, загружается ли сессия, играет ли она, стоит на паузе, завершилась или сломалась;
+- `position_ms` и `duration_ms` достаточно для progress bar;
+- `active_output_device_name` показывает, куда звук реально уходит сейчас;
+- `error_message` даёт понятное объяснение, если `status == error`.
+
+Этот паттерн намеренно простой. От него одинаково удобно строить и CLI-прогресс,
+и desktop timer, и UI store.
+
+### 7. `seek_to(...)` остаётся обычной transport-операцией
+
+Когда воспроизведение уже прошло 5 секунд, а трек достаточно длинный, код
+вызывает `seek_to(30000)`.
+
+Это важно, потому что показывает: seek — не decoder-specific хак, а часть
+публичного контракта сессии, выраженная в миллисекундах и принадлежащая
+именно session layer.
+
+Для application code это значит, что transport widget может оставаться чистым.
+Ему не нужно понимать внутренности декодера.
+
+### 8. Терминальные состояния разнесены явно
+
+Цикл завершается двумя разными способами:
+
+- `idle` означает, что воспроизведение завершилось штатно;
+- `error` означает, что сессия перешла в фатальное состояние.
+
+Такое явное ветвление важно, потому что реальным плеерам обычно нужно разное
+продуктовое поведение в этих случаях. Completion может перевести плейлист на
+следующий трек, а ошибка — показать toast, сделать retry или поднять диагностику.
+
+## Когда брать этот паттерн за основу
+
+Используйте этот кейс, если вам нужен:
+
+- небольшой desktop player;
+- плеер для подкастов или spoken-word;
+- UI, построенный вокруг `playback_state` snapshot-ов, а не скрытого фонового состояния.
