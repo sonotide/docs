@@ -126,6 +126,7 @@
                   "en/examples/render-silence",
                   "en/examples/playback-session",
                   "en/examples/output-probe",
+                  "en/examples/dynamic-equalizer",
                   "en/examples/spoken-player"
                 ]
               }
@@ -238,6 +239,7 @@
                   "ru/examples/render-silence",
                   "ru/examples/playback-session",
                   "ru/examples/output-probe",
+                  "ru/examples/dynamic-equalizer",
                   "ru/examples/spoken-player"
                 ]
               }

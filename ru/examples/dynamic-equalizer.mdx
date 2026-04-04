@@ -1,0 +1,229 @@
+---
+title: "Динамический эквалайзер"
+description: "Соберите кастомный EQ layout, добавляйте и удаляйте полосы в рантайме и безопасно двигайте их по оси частот."
+---
+
+Этот walkthrough нужен приложениям, которым нужен не фиксированный набор ползунков, а маленький EQ-редактор. Цель здесь именно в том, чтобы пользователь мог таскать band не только вверх-вниз, но и влево-вправо по частоте.
+
+В отличие от простых EQ-сниппетов, этот пример делает пять вещей:
+
+1. читает глобальные ограничения по числу полос и частотам;
+2. стартует с кастомного дефолтного layout-а, где полос меньше 10;
+3. добавляет новую полосу только если у Sonotide ещё есть свободная ёмкость;
+4. двигает существующую полосу внутри диапазона, который вернула сама сессия;
+5. применяет весь layout обратно как один цельный `equalizer_state`.
+
+## Полный код
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <string_view>
+
+#include "sonotide/runtime.h"
+
+namespace {
+
+void print_error(std::string_view stage, const sonotide::error& error) {
+    std::cerr << stage
+              << " failed | category=" << sonotide::to_string(error.category)
+              << " code=" << sonotide::to_string(error.code)
+              << " operation=" << error.operation
+              << " message=" << error.message
+              << '\n';
+}
+
+void print_bands(const sonotide::equalizer_state& state) {
+    std::cout << "bands=" << state.bands.size()
+              << " preset=" << sonotide::to_string(state.active_preset_id)
+              << " output_gain_db=" << state.output_gain_db
+              << " headroom_compensation_db=" << state.headroom_compensation_db
+              << '\n';
+
+    for (std::size_t index = 0; index < state.bands.size(); ++index) {
+        const auto& band = state.bands[index];
+        std::cout << "  [" << index << "]"
+                  << " freq=" << band.center_frequency_hz
+                  << "Hz gain=" << band.gain_db
+                  << "dB\n";
+    }
+}
+
+}  // namespace
+
+int main() {
+    auto runtime_result = sonotide::runtime::create();
+    if (!runtime_result) {
+        print_error("runtime::create", runtime_result.error());
+        return 1;
+    }
+
+    sonotide::runtime runtime = std::move(runtime_result.value());
+
+    auto session_result = runtime.open_playback_session();
+    if (!session_result) {
+        print_error("open_playback_session", session_result.error());
+        return 1;
+    }
+
+    sonotide::playback_session session = std::move(session_result.value());
+
+    auto state = session.equalizer_state();
+    state.enabled = true;
+    state.output_gain_db = -2.0f;
+
+    const auto count_limits = sonotide::supported_equalizer_band_count_limits();
+    const auto frequency_limits = sonotide::supported_equalizer_frequency_limits();
+
+    std::cout << "band_count range: "
+              << count_limits.min_band_count
+              << ".." << count_limits.max_band_count
+              << '\n';
+    std::cout << "frequency range: "
+              << frequency_limits.min_frequency_hz
+              << "Hz.."
+              << frequency_limits.max_frequency_hz
+              << "Hz spacing>="
+              << frequency_limits.min_band_spacing_hz
+              << "Hz\n";
+
+    state.bands = sonotide::make_default_equalizer_bands(5);
+    state.bands[0].gain_db = 3.0f;
+    state.bands[1].gain_db = 1.5f;
+    state.bands[2].gain_db = -1.0f;
+    state.bands[3].gain_db = 2.0f;
+    state.bands[4].gain_db = 1.0f;
+
+    if (state.bands.size() < count_limits.max_band_count) {
+        state.bands.push_back(sonotide::equalizer_band{
+            .center_frequency_hz = 2400.0f,
+            .gain_db = 2.5f,
+        });
+    }
+
+    auto apply_result = session.apply_equalizer_state(state);
+    if (!apply_result) {
+        print_error("apply_equalizer_state(initial)", apply_result.error());
+        return 1;
+    }
+
+    auto move_range = session.equalizer_band_frequency_range(2);
+    if (move_range.has_value()) {
+        const float requested_frequency_hz = 900.0f;
+        const float clamped_frequency_hz = std::clamp(
+            requested_frequency_hz,
+            move_range->min_frequency_hz,
+            move_range->max_frequency_hz);
+        auto move_result = session.set_equalizer_band_frequency(2, clamped_frequency_hz);
+        if (!move_result) {
+            print_error("set_equalizer_band_frequency", move_result.error());
+            return 1;
+        }
+    }
+
+    auto add_result = session.add_equalizer_band(5200.0f, 1.25f);
+    if (!add_result) {
+        print_error("add_equalizer_band", add_result.error());
+        return 1;
+    }
+
+    auto gain_result = session.set_equalizer_band_gain(0, 4.0f);
+    if (!gain_result) {
+        print_error("set_equalizer_band_gain", gain_result.error());
+        return 1;
+    }
+
+    auto remove_result = session.remove_equalizer_band(1);
+    if (!remove_result) {
+        print_error("remove_equalizer_band", remove_result.error());
+        return 1;
+    }
+
+    print_bands(session.equalizer_state());
+    return 0;
+}
+```
+
+## Что происходит по шагам
+
+### 1. Пример всё ещё стартует через `runtime` и `playback_session`
+
+Эквалайзер здесь не отдельный DSP-helper. Он является частью playback pipeline Sonotide, поэтому пример сначала создаёт [`runtime`](/ru/reference/api#api-runtime), а затем открывает [`playback_session`](/ru/reference/api#api-playback).
+
+Это важно, потому что состояние EQ живёт рядом с transport state, routing-ом и метаданными согласованного audio path.
+
+### 2. `supported_equalizer_*_limits()` даёт UI правила заранее
+
+Пример читает:
+
+- `supported_equalizer_band_count_limits()`;
+- `supported_equalizer_frequency_limits()`.
+
+Именно на этот контракт должен опираться ваш UI до того, как он начнёт рисовать handles и принимать drag-жесты.
+
+Вам не нужно хардкодить:
+
+- что максимум полос равен 10;
+- что минимальная частота равна 20 Гц;
+- что между соседними полосами нужен минимальный зазор.
+
+### 3. `make_default_equalizer_bands(5)` даёт музыкально вменяемую стартовую раскладку
+
+Вместо того чтобы придумывать частоты с нуля, пример просит у Sonotide дефолтный layout на пять полос.
+
+Это полезно, когда:
+
+- вам нужен более простой редактор, чем полный layout по умолчанию;
+- вы всё ещё хотите частоты, распределённые в духе встроенной модели Sonotide;
+- вы хотите, чтобы встроенные пресеты позже корректно проецировались на ваш кастомный layout.
+
+### 4. `apply_equalizer_state(...)` удобнее всего для полной замены layout-а
+
+Пример сначала правит `state.bands`, а потом применяет полный snapshot одним вызовом.
+
+Это правильный паттерн, когда:
+
+- пользователь изменил сразу несколько полос;
+- UI импортировал сохранённый пресет из настроек приложения;
+- вы перестроили layout после переключения режима вроде “simple EQ” и “advanced EQ”.
+
+Sonotide при этом нормализует состояние, сортирует layout по частотам, clamp-ит gain-ы и пересчитывает производные метаданные.
+
+### 5. `equalizer_band_frequency_range(...)` и есть база для горизонтального drag-а
+
+Самый важный вызов для FL-подобного редактора здесь такой:
+
+```cpp
+const auto move_range = session.equalizer_band_frequency_range(2);
+```
+
+Этот диапазон уже учитывает:
+
+- глобальные минимумы и максимумы по частоте;
+- минимальный зазор между соседними полосами;
+- текущий live layout.
+
+Именно его UI должен использовать, когда пользователь тащит band влево или вправо. Тогда `set_equalizer_band_frequency(...)` становится просто обновлением состояния, а не догадкой.
+
+### 6. Добавление, правка и удаление полос идут через session-level helpers
+
+После применения начального snapshot-а пример показывает runtime-операции:
+
+- `add_equalizer_band(...)`;
+- `set_equalizer_band_gain(...)`;
+- `remove_equalizer_band(...)`.
+
+Эти helpers удобны для инкрементальных правок из UI, потому что не нужно пересобирать полный `equalizer_state` на каждый маленький жест.
+
+### 7. `equalizer_state()` остаётся единственным источником правды
+
+В конце пример печатает `session.equalizer_state()`.
+
+Именно этому snapshot-у ваш UI должен доверять в вопросах:
+
+- фактического порядка полос;
+- текущих gain-ов и центральных частот;
+- активного встроенного пресета или `custom`;
+- рассчитанной headroom-компенсации.
+
+Если приложение сохраняет настройки EQ, лучше сохранять именно этот нормализованный snapshot, а не промежуточный локальный draft.

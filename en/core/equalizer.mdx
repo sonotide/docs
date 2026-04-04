@@ -1,9 +1,11 @@
 ---
 title: "Built-in Equalizer"
-description: "Leverage Sonotide's built-in 10-band equalizer to fine-tune playback audio."
+description: "Leverage Sonotide's built-in equalizer with up to 10 movable bands to fine-tune playback audio."
 ---
 
-When using the `playback_session`, Sonotide provides a fully integrated 10-band graphic equalizer. Since standard Windows WASAPI does not provide this out of the box, Sonotide wires it up natively inside the Media Foundation decode pipeline so you don't have to build your own DSP chain from scratch.
+When using the `playback_session`, Sonotide provides a fully integrated equalizer with a dynamic band layout. You can keep the familiar default 10-band setup, reduce it to fewer bands, or build your own layout with up to 10 movable bands.
+
+Since standard Windows WASAPI does not provide this out of the box, Sonotide wires it up natively inside the Media Foundation decode pipeline so you don't have to build your own DSP chain from scratch.
 
 ## 1. Equalizer Basics
 
@@ -22,29 +24,65 @@ session.set_equalizer_output_gain(-1.5f);
 
 ## 2. Advanced Tuning
 
-If the built-in presets (`rock`, `jazz`, `spoken_podcast`, etc.) don't fit your needs, you can manipulate each of the 10 bands manually:
+If the built-in presets (`rock`, `jazz`, `spoken_podcast`, etc.) don't fit your needs, you can still manipulate bands manually:
 
 ```cpp
-// Boost the sub-bass frequency slightly
-session.set_equalizer_band_gain(0, 3.5f); 
+// Boost one existing band
+session.set_equalizer_band_gain(0, 3.5f);
+
+// Move that same band to a different center frequency
+session.set_equalizer_band_frequency(0, 72.0f);
+
+// Add a new band if you need a denser shape in the low mids
+session.add_equalizer_band(450.0f, 1.5f);
+
+// Remove a band later if the UI collapses back to a simpler layout
+session.remove_equalizer_band(2);
 ```
 
 <Warning>
   Pushing bands aggressively above `+0dB` can cause digital clipping. If you drastically boost certain frequencies, be sure to lower the `output_gain_db` to compensate.
 </Warning>
 
-## 3. Reading the Equalizer State
+## 3. Band Limits and Default Layouts
+
+The EQ is dynamic, but it is not unbounded. Sonotide exposes the limits explicitly so your UI can stay honest:
+
+```cpp
+const auto count_limits = sonotide::supported_equalizer_band_count_limits();
+const auto frequency_limits = sonotide::supported_equalizer_frequency_limits();
+
+auto state = session.equalizer_state();
+if (state.bands.size() < count_limits.max_band_count) {
+    session.add_equalizer_band(2200.0f, 0.0f);
+}
+
+const auto range = session.equalizer_band_frequency_range(0);
+if (range.has_value()) {
+    session.set_equalizer_band_frequency(0, range->min_frequency_hz);
+}
+```
+
+If you want a ready-made layout, build one with `make_default_equalizer_bands(...)` and apply it through a full `equalizer_state`.
+
+## 4. Reading the Equalizer State
 
 You can take a snapshot of the current EQ settings via `session.equalizer_state()`. This returns a struct that contains everything your UI needs to draw faders:
 
 <CardGroup cols={2}>
   <Card title="Current Gains & Status" icon="sliders">
-    Read the `bands` array to see exact Hz frequencies and current dB gains. Check if EQ is `enabled`.
+    Read the `bands` vector to see exact Hz frequencies and current dB gains. Check if EQ is `enabled`.
   </Card>
   <Card title="Available Presets" icon="list">
     Read the `available_presets` array to populate a dropdown menu in your application.
   </Card>
 </CardGroup>
+
+The `last_nonflat_band_gains_db` snapshot is also useful if your UI needs a “return to the last shaped curve” action after the user temporarily toggles a flat state.
+
+## 5. Full Walkthrough
+
+For a complete dynamic example with custom layouts, movable bands, and runtime-safe constraints, see [Dynamic equalizer](/en/examples/dynamic-equalizer).
 
 ## Design Note
 

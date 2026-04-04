@@ -377,6 +377,9 @@ Media Foundation, render path и встроенного эквалайзера.
 | `set_equalizer_enabled(bool enabled)` | `enabled`: активна ли EQ-обработка | `result<void>` | Включает или выключает EQ-обработку. |
 | `select_equalizer_preset(equalizer_preset_id preset_id)` | `preset_id`: идентификатор встроенного пресета | `result<void>` | Применяет один из встроенных EQ-пресетов. |
 | `set_equalizer_band_gain(std::size_t band_index, float gain_db)` | `band_index`: индекс полосы от нуля; `gain_db`: усиление в dB | `result<void>` | Меняет одну полосу эквалайзера. |
+| `add_equalizer_band(float center_frequency_hz, float gain_db = 0.0f)` | `center_frequency_hz`: желаемая центральная частота; `gain_db`: начальное усиление | `result<void>` | Добавляет новую EQ-полосу, если в текущем layout ещё есть свободное место. |
+| `remove_equalizer_band(std::size_t band_index)` | `band_index`: индекс полосы от нуля | `result<void>` | Удаляет одну полосу из активного layout-а эквалайзера. |
+| `set_equalizer_band_frequency(std::size_t band_index, float center_frequency_hz)` | `band_index`: индекс полосы от нуля; `center_frequency_hz`: новая центральная частота | `result<void>` | Сдвигает полосу влево или вправо в рамках допустимого диапазона для этой позиции. |
 | `reset_equalizer()` | нет | `result<void>` | Возвращает эквалайзер в плоское состояние. |
 | `set_equalizer_output_gain(float output_gain_db)` | `output_gain_db`: выходное усиление после EQ в dB | `result<void>` | Меняет post-EQ gain. |
 | `apply_equalizer_state(const equalizer_state& state)` | `state`: полный снимок EQ | `result<void>` | Целиком заменяет текущее состояние эквалайзера. |
@@ -384,6 +387,7 @@ Media Foundation, render path и встроенного эквалайзера.
 | `select_output_device(std::string device_id)` | `device_id`: идентификатор целевого endpoint-а | `result<void>` | Перепривязывает воспроизведение к другому устройству вывода. |
 | `state() const` | нет | `playback_state` | Возвращает текущий снимок playback-состояния. |
 | `equalizer_state() const` | нет | `equalizer_state` | Возвращает текущий снимок состояния эквалайзера. |
+| `equalizer_band_frequency_range(std::size_t band_index) const` | `band_index`: индекс полосы от нуля | `std::optional<equalizer_frequency_range>` | Возвращает допустимый диапазон частот для перемещения одной активной полосы. |
 | `close()` | нет | `result<void>` | Закрывает сессию и освобождает связанные ресурсы. |
 
 ## `playback_state.h`
@@ -426,7 +430,32 @@ Media Foundation, render path и встроенного эквалайзера.
 
 | Константа | Значение | Смысл |
 | --- | --- | --- |
-| `equalizer_band_count` | `10` | Количество фиксированных полос встроенного эквалайзера |
+| `equalizer_band_count` | `10` | Исторический alias для совместимости со старым 10-band API |
+| `equalizer_max_band_count` | `10` | Максимальное число полос, поддерживаемое встроенным эквалайзером |
+
+### Вспомогательные структуры
+
+### `struct equalizer_band_count_limits`
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `min_band_count` | `std::size_t` | Минимально допустимое число EQ-полос |
+| `max_band_count` | `std::size_t` | Максимально допустимое число EQ-полос |
+
+### `struct equalizer_frequency_limits`
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `min_frequency_hz` | `float` | Минимальная допустимая центральная частота полосы |
+| `max_frequency_hz` | `float` | Максимальная допустимая центральная частота полосы |
+| `min_band_spacing_hz` | `float` | Минимальный зазор, который Sonotide сохраняет между соседними полосами |
+
+### `struct equalizer_frequency_range`
+
+| Поле | Тип | Смысл |
+| --- | --- | --- |
+| `min_frequency_hz` | `float` | Нижняя допустимая частота для перемещения конкретной полосы в текущем layout-е |
+| `max_frequency_hz` | `float` | Верхняя допустимая частота для перемещения конкретной полосы в текущем layout-е |
 
 #### `enum class equalizer_preset_id`
 
@@ -472,7 +501,7 @@ Media Foundation, render path и встроенного эквалайзера.
 | --- | --- | --- |
 | `id` | `equalizer_preset_id` | Идентификатор пресета |
 | `title` | `const char*` | Человекочитаемый заголовок пресета |
-| `gains_db` | `std::array<float, equalizer_band_count>` | Усиления всех полос |
+| `gains_db` | `std::vector<float>` | Reference gain-кривая, которая проецируется на текущий активный layout |
 
 ### `struct equalizer_state`
 
@@ -481,8 +510,8 @@ Media Foundation, render path и встроенного эквалайзера.
 | `status` | `equalizer_status` | Текущее состояние доступности EQ |
 | `enabled` | `bool` | Включена ли EQ-обработка |
 | `active_preset_id` | `equalizer_preset_id` | Идентификатор текущего активного пресета |
-| `bands` | `std::array<equalizer_band, equalizer_band_count>` | Текущие настройки полос |
-| `last_nonflat_band_gains_db` | `std::array<float, equalizer_band_count>` | Последние пользовательские non-flat значения полос |
+| `bands` | `std::vector<equalizer_band>` | Текущий активный layout полос с пользовательскими частотами и gain-ами |
+| `last_nonflat_band_gains_db` | `std::vector<float>` | Последние пользовательские non-flat значения, выровненные по текущему layout-у |
 | `available_presets` | `std::vector<equalizer_preset>` | Набор пресетов, доступный вызывающему коду |
 | `output_gain_db` | `float` | Выходное усиление после EQ в dB |
 | `headroom_compensation_db` | `float` | Автоматически рассчитанная компенсация запаса по уровню |
@@ -492,6 +521,10 @@ Media Foundation, render path и встроенного эквалайзера.
 
 | Функция | Параметры | Возвращает | Описание |
 | --- | --- | --- | --- |
+| `supported_equalizer_band_count_limits()` | нет | `equalizer_band_count_limits` | Возвращает поддерживаемый диапазон количества полос. |
+| `supported_equalizer_frequency_limits()` | нет | `equalizer_frequency_limits` | Возвращает глобальные допустимые пределы частот и минимальный зазор между полосами. |
+| `make_default_equalizer_bands(std::size_t band_count)` | `band_count`: запрошенное число полос | `std::vector<equalizer_band>` | Строит дефолтный layout Sonotide для указанного количества полос. |
+| `equalizer_band_editable_frequency_range(std::span<const equalizer_band> bands, std::size_t band_index)` | `bands`: текущий layout; `band_index`: полоса для проверки | `std::optional<equalizer_frequency_range>` | Возвращает допустимый диапазон перемещения одной полосы внутри конкретного layout-а. |
 | `to_string(equalizer_preset_id preset_id)` | `preset_id`: идентификатор пресета | `std::string_view` | Возвращает стабильный строковый токен пресета. |
 | `to_string(equalizer_status status)` | `status`: статус EQ | `std::string_view` | Возвращает стабильный строковый токен статуса. |
 | `equalizer_preset_id_from_string(std::string_view value)` | `value`: строковый токен пресета | `std::optional<equalizer_preset_id>` | Парсит идентификатор пресета из строки. |

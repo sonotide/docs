@@ -35,6 +35,9 @@ The examples fall into two groups:
   <Card title="Output probe" icon="speaker-simple-high" href="/en/examples/output-probe">
     Open a stream on a specific device, inspect the negotiated format, and read lifecycle status.
   </Card>
+  <Card title="Dynamic equalizer" icon="sliders-horizontal" href="/en/examples/dynamic-equalizer">
+    Build a movable EQ layout, add and remove bands, and keep UI edits inside Sonotide's limits.
+  </Card>
   <Card title="Spoken-word player" icon="waveform" href="/en/examples/spoken-player">
     Build a small player workflow around `playback_session`, routing, EQ, and state polling.
   </Card>
@@ -54,4 +57,5 @@ cmd.exe /c "build\\msvc-x64-debug\\examples\\Debug\\sonotide_playback_session.ex
 - Start with [Render silence](/en/examples/render-silence) if you already own PCM and only need an output path.
 - Start with [Playback session](/en/examples/playback-session) if you want a reusable playback workflow inside the framework.
 - Start with [Output probe](/en/examples/output-probe) if your app lets the user validate a specific output device.
+- Start with [Dynamic equalizer](/en/examples/dynamic-equalizer) if your UI needs movable EQ bands, custom layouts, or FL-style left-right edits.
 - Start with [Spoken-word player](/en/examples/spoken-player) if you are building a small player driven by `playback_state`.

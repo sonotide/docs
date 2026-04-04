@@ -35,6 +35,9 @@ description: "Навигационная страница по примерам 
   <Card title="Проверка output-устройства" icon="speaker-simple-high" href="/ru/examples/output-probe">
     Открыть поток на конкретном устройстве, посмотреть negotiated format и lifecycle status.
   </Card>
+  <Card title="Динамический эквалайзер" icon="sliders-horizontal" href="/ru/examples/dynamic-equalizer">
+    Собрать movable EQ layout, добавлять и удалять полосы и держать правки UI в рамках ограничений Sonotide.
+  </Card>
   <Card title="Плеер spoken-word" icon="waveform" href="/ru/examples/spoken-player">
     Построить небольшой player workflow вокруг `playback_session`, routing, EQ и polling state.
   </Card>
@@ -54,4 +57,5 @@ cmd.exe /c "build\\msvc-x64-debug\\examples\\Debug\\sonotide_playback_session.ex
 - Начинайте с [Вывода тишины](/ru/examples/render-silence), если у вас уже есть PCM и нужен только output path.
 - Начинайте с [Сессии воспроизведения](/ru/examples/playback-session), если нужен готовый playback workflow внутри фреймворка.
 - Начинайте с [Проверки output-устройства](/ru/examples/output-probe), если приложение должно валидировать конкретный endpoint.
+- Начинайте с [Динамического эквалайзера](/ru/examples/dynamic-equalizer), если в UI нужны перемещаемые полосы, кастомные layout-ы и FL-подобные правки по частоте.
 - Начинайте с [Плеера spoken-word](/ru/examples/spoken-player), если вы строите небольшой player вокруг `playback_state`.
