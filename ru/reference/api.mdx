@@ -389,6 +389,7 @@ Media Foundation, render path и встроенного эквалайзера.
 | `state() const` | нет | `playback_state` | Возвращает текущий снимок playback-состояния. |
 | `equalizer_state() const` | нет | `equalizer_state` | Возвращает текущий снимок состояния эквалайзера. |
 | `sample_equalizer_response(std::span<const float> frequencies_hz) const` | `frequencies_hz`: частоты выборки, которые запросил вызывающий код | `result<equalizer_response_curve>` | Возвращает точную steady-state EQ-кривую для текущей live-сессии. |
+| `preview_equalizer_response(const equalizer_preview_state& preview_state, std::span<const float> frequencies_hz) const` | `preview_state`: временный черновой EQ-state; `frequencies_hz`: частоты выборки, которые запросил вызывающий код | `result<equalizer_response_curve>` | Возвращает точную кривую для временного EQ-draft без изменения live session state. |
 | `equalizer_band_frequency_range(std::size_t band_index) const` | `band_index`: индекс полосы от нуля | `std::optional<equalizer_frequency_range>` | Возвращает допустимый диапазон частот для перемещения одной активной полосы. |
 | `close()` | нет | `result<void>` | Закрывает сессию и освобождает связанные ресурсы. |
 

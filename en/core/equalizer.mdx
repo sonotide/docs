@@ -115,6 +115,23 @@ This returns `equalizer_response_curve`, which already includes:
 
 That makes Sonotide the single source of truth. The UI only needs to map `frequency_hz` to X and `response_db` to Y.
 
+If the user is still editing a draft layout and you do not want to commit it to
+the live session yet, use the preview API:
+
+```cpp
+sonotide::equalizer_preview_state preview_state;
+preview_state.enabled = true;
+preview_state.output_gain_db = 2.0f;
+preview_state.bands = draft_bands;
+
+auto preview_curve_result =
+    session.preview_equalizer_response(preview_state, ui_frequencies_hz);
+```
+
+This preview path uses the same normalization and DSP math as the real EQ
+pipeline, but it does not mutate `equalizer_state()`, the active preset, or
+the playback graph.
+
 ## 6. Full Walkthrough
 
 For a complete dynamic example with custom layouts, movable bands, and runtime-safe constraints, see [Dynamic equalizer](/en/examples/dynamic-equalizer).

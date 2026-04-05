@@ -257,7 +257,25 @@ That range already accounts for:
 
 The UI should use that range when the user drags a handle left or right. Then `set_equalizer_band_frequency(...)` becomes a simple state update instead of a guess.
 
-### 7. `sample_equalizer_response(...)` is how the UI gets the exact curve
+### 7. `preview_equalizer_response(...)` is how the UI previews a draft curve
+
+If the application keeps a local draft while the user drags handles around,
+build a temporary `equalizer_preview_state` and preview it through the session:
+
+```cpp
+sonotide::equalizer_preview_state preview_state;
+preview_state.enabled = true;
+preview_state.output_gain_db = 2.0f;
+preview_state.bands = draft_bands;
+
+auto preview_curve_result =
+    session.preview_equalizer_response(preview_state, ui_frequencies_hz);
+```
+
+This returns the exact curve Sonotide would apply after normalization, but it
+does not mutate the live session state.
+
+### 8. `sample_equalizer_response(...)` is how the UI gets the exact committed curve
 
 After editing the state, the example calls:
 
@@ -279,7 +297,7 @@ The returned points already include:
 
 That means the frontend does not need to approximate the curve with its own formulas anymore.
 
-### 8. Add, tweak, and remove bands with session-level helpers
+### 9. Add, tweak, and remove bands with session-level helpers
 
 After the initial snapshot is applied, the example demonstrates the runtime editing calls:
 
@@ -289,7 +307,7 @@ After the initial snapshot is applied, the example demonstrates the runtime edit
 
 Those helpers are convenient for incremental UI edits because you do not need to rebuild a full `equalizer_state` for every small gesture.
 
-### 9. `equalizer_state()` is your single source of truth after every edit
+### 10. `equalizer_state()` is your single source of truth after every committed edit
 
 The last call prints `session.equalizer_state()`.
 

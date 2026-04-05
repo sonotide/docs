@@ -257,7 +257,25 @@ const auto move_range = session.equalizer_band_frequency_range(2);
 
 Именно его UI должен использовать, когда пользователь тащит band влево или вправо. Тогда `set_equalizer_band_frequency(...)` становится просто обновлением состояния, а не догадкой.
 
-### 7. `sample_equalizer_response(...)` нужен UI для точной кривой
+### 7. `preview_equalizer_response(...)` нужен UI для черновой preview-кривой
+
+Если приложение держит локальный draft, пока пользователь таскает ручки,
+соберите временный `equalizer_preview_state` и запросите preview через session:
+
+```cpp
+sonotide::equalizer_preview_state preview_state;
+preview_state.enabled = true;
+preview_state.output_gain_db = 2.0f;
+preview_state.bands = draft_bands;
+
+auto preview_curve_result =
+    session.preview_equalizer_response(preview_state, ui_frequencies_hz);
+```
+
+Так вы получите точную кривую, которую Sonotide применил бы после
+нормализации, но живая сессия останется неизменной.
+
+### 8. `sample_equalizer_response(...)` нужен UI для точной уже применённой кривой
 
 После редактирования состояния пример вызывает:
 
@@ -279,7 +297,7 @@ auto curve_result = sonotide::sample_equalizer_response(
 
 То есть фронту больше не нужно аппроксимировать кривую своими формулами.
 
-### 8. Добавление, правка и удаление полос идут через session-level helpers
+### 9. Добавление, правка и удаление полос идут через session-level helpers
 
 После применения начального snapshot-а пример показывает runtime-операции:
 
@@ -289,7 +307,7 @@ auto curve_result = sonotide::sample_equalizer_response(
 
 Эти helpers удобны для инкрементальных правок из UI, потому что не нужно пересобирать полный `equalizer_state` на каждый маленький жест.
 
-### 9. `equalizer_state()` остаётся единственным источником правды
+### 10. `equalizer_state()` остаётся единственным источником правды после коммита изменений
 
 В конце пример печатает `session.equalizer_state()`.
 
