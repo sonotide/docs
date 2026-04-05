@@ -378,6 +378,7 @@ equalizer.
 | `set_equalizer_enabled(bool enabled)` | `enabled`: whether EQ processing is active | `result<void>` | Enables or disables EQ processing. |
 | `select_equalizer_preset(equalizer_preset_id preset_id)` | `preset_id`: built-in preset identifier | `result<void>` | Applies a built-in EQ preset. |
 | `set_equalizer_band_gain(std::size_t band_index, float gain_db)` | `band_index`: zero-based EQ band index; `gain_db`: gain in decibels | `result<void>` | Changes one EQ band. |
+| `set_equalizer_band_q(std::size_t band_index, float q_value)` | `band_index`: zero-based EQ band index; `q_value`: band Q value | `result<void>` | Changes the bell width of one EQ band. |
 | `add_equalizer_band(float center_frequency_hz, float gain_db = 0.0f)` | `center_frequency_hz`: desired band center in hertz; `gain_db`: initial gain | `result<void>` | Adds a new EQ band when the current layout still has free capacity. |
 | `remove_equalizer_band(std::size_t band_index)` | `band_index`: zero-based EQ band index | `result<void>` | Removes one band from the active EQ layout. |
 | `set_equalizer_band_frequency(std::size_t band_index, float center_frequency_hz)` | `band_index`: zero-based EQ band index; `center_frequency_hz`: new desired center | `result<void>` | Moves one band left or right within the valid frequency range for that slot. |
@@ -388,6 +389,7 @@ equalizer.
 | `select_output_device(std::string device_id)` | `device_id`: target output endpoint identifier | `result<void>` | Rebinds playback to another output device. |
 | `state() const` | none | `playback_state` | Returns the current playback-state snapshot. |
 | `equalizer_state() const` | none | `equalizer_state` | Returns the current EQ-state snapshot. |
+| `sample_equalizer_response(std::span<const float> frequencies_hz) const` | `frequencies_hz`: sampling frequencies requested by the caller | `result<equalizer_response_curve>` | Samples the exact steady-state EQ curve for the current live session. |
 | `equalizer_band_frequency_range(std::size_t band_index) const` | `band_index`: zero-based EQ band index | `std::optional<equalizer_frequency_range>` | Returns the valid frequency range for moving one active band. |
 | `close()` | none | `result<void>` | Closes the session and releases its runtime resources. |
 
@@ -433,6 +435,7 @@ equalizer.
 | --- | --- | --- |
 | `equalizer_band_count` | `10` | Legacy compatibility alias for the default maximum band count |
 | `equalizer_max_band_count` | `10` | Maximum number of bands supported by the built-in equalizer |
+| `default_equalizer_q_value` | `1.414F` | Historical default Q value used by Sonotide's built-in bell filters |
 
 ### Support structs
 
@@ -457,6 +460,13 @@ equalizer.
 | --- | --- | --- |
 | `min_frequency_hz` | `float` | Lowest valid frequency for one movable band in the current layout |
 | `max_frequency_hz` | `float` | Highest valid frequency for one movable band in the current layout |
+
+### `struct equalizer_q_limits`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `min_q_value` | `float` | Lowest supported Q value for one EQ band |
+| `max_q_value` | `float` | Highest supported Q value for one EQ band |
 
 #### `enum class equalizer_preset_id`
 
@@ -495,6 +505,24 @@ equalizer.
 | --- | --- | --- |
 | `center_frequency_hz` | `float` | Band center frequency in hertz |
 | `gain_db` | `float` | Gain applied to the band in decibels |
+| `q_value` | `float` | Bell-filter Q value that controls how narrow or wide the band response is |
+
+### `struct equalizer_response_point`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `frequency_hz` | `float` | Requested sampling frequency in hertz |
+| `response_db` | `float` | Final EQ response at that frequency in decibels |
+
+### `struct equalizer_response_curve`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `points` | `std::vector<equalizer_response_point>` | Sampled response points in the same order as the requested frequencies |
+| `sample_rate_hz` | `float` | Sample rate used to evaluate the filter response |
+| `applied_headroom_compensation_db` | `float` | Automatically applied preamp compensation included in the curve |
+| `applied_output_gain_db` | `float` | Post-EQ output gain included in the curve |
+| `enabled` | `bool` | Whether the sampled curve reflects an enabled EQ path |
 
 ### `struct equalizer_preset`
 
@@ -524,8 +552,10 @@ equalizer.
 | --- | --- | --- | --- |
 | `supported_equalizer_band_count_limits()` | none | `equalizer_band_count_limits` | Returns the supported band-count range. |
 | `supported_equalizer_frequency_limits()` | none | `equalizer_frequency_limits` | Returns the supported global frequency limits and minimum band spacing. |
+| `supported_equalizer_q_limits()` | none | `equalizer_q_limits` | Returns the supported Q-value range for one band. |
 | `make_default_equalizer_bands(std::size_t band_count)` | `band_count`: requested number of bands | `std::vector<equalizer_band>` | Builds Sonotide's default EQ layout for the requested band count. |
 | `equalizer_band_editable_frequency_range(std::span<const equalizer_band> bands, std::size_t band_index)` | `bands`: active layout; `band_index`: band to inspect | `std::optional<equalizer_frequency_range>` | Returns the valid frequency movement range for one band inside a concrete layout. |
+| `sample_equalizer_response(const equalizer_state& state, float sample_rate_hz, std::span<const float> frequencies_hz)` | `state`: EQ snapshot to sample; `sample_rate_hz`: explicit sample rate; `frequencies_hz`: requested sampling frequencies | `result<equalizer_response_curve>` | Samples the exact steady-state EQ curve for an offline snapshot or editor workflow. |
 | `to_string(equalizer_preset_id preset_id)` | `preset_id`: preset identifier | `std::string_view` | Returns a stable string token for a preset id. |
 | `to_string(equalizer_status status)` | `status`: EQ status value | `std::string_view` | Returns a stable string token for an EQ status. |
 | `equalizer_preset_id_from_string(std::string_view value)` | `value`: stable preset token | `std::optional<equalizer_preset_id>` | Parses a preset identifier from a string token. |

@@ -1,22 +1,25 @@
 ---
 title: "Dynamic equalizer"
-description: "Build a custom EQ layout, add or remove bands at runtime, and move them safely across the frequency axis."
+description: "Build a custom EQ layout, tune per-band Q, sample the exact curve, and move bands safely across the frequency axis."
 ---
 
 This walkthrough is for applications that want something closer to a small EQ editor than a fixed graphic preset strip. The goal is to let the user drag bands left and right, not only up and down.
 
-Unlike the simpler EQ snippets, this example does five things:
+Unlike the simpler EQ snippets, this example does seven things:
 
 1. reads the global band-count and frequency limits;
 2. starts from a custom default layout with fewer than 10 bands;
-3. adds a new band only if Sonotide still has capacity;
-4. moves an existing band inside the editable range returned by the session;
-5. applies the entire layout back as one coherent `equalizer_state`.
+3. tunes the bell width of individual bands through `q_value`;
+4. adds a new band only if Sonotide still has capacity;
+5. moves an existing band inside the editable range returned by the session;
+6. samples the exact steady-state response curve for UI rendering;
+7. applies the entire layout back as one coherent `equalizer_state`.
 
 ## Full code
 
 ```cpp
 #include <algorithm>
+#include <array>
 #include <iostream>
 #include <string_view>
 
@@ -45,7 +48,8 @@ void print_bands(const sonotide::equalizer_state& state) {
         std::cout << "  [" << index << "]"
                   << " freq=" << band.center_frequency_hz
                   << "Hz gain=" << band.gain_db
-                  << "dB\n";
+                  << "dB q=" << band.q_value
+                  << '\n';
     }
 }
 
@@ -89,17 +93,29 @@ int main() {
 
     state.bands = sonotide::make_default_equalizer_bands(5);
     state.bands[0].gain_db = 3.0f;
+    state.bands[0].q_value = 0.9f;
     state.bands[1].gain_db = 1.5f;
+    state.bands[1].q_value = 1.1f;
     state.bands[2].gain_db = -1.0f;
+    state.bands[2].q_value = 1.8f;
     state.bands[3].gain_db = 2.0f;
+    state.bands[3].q_value = 2.4f;
     state.bands[4].gain_db = 1.0f;
+    state.bands[4].q_value = 1.2f;
 
     if (state.bands.size() < count_limits.max_band_count) {
         state.bands.push_back(sonotide::equalizer_band{
             .center_frequency_hz = 2400.0f,
             .gain_db = 2.5f,
+            .q_value = 2.0f,
         });
     }
+
+    const auto q_limits = sonotide::supported_equalizer_q_limits();
+    state.bands[2].q_value = std::clamp(
+        state.bands[2].q_value,
+        q_limits.min_q_value,
+        q_limits.max_q_value);
 
     auto apply_result = session.apply_equalizer_state(state);
     if (!apply_result) {
@@ -133,10 +149,33 @@ int main() {
         return 1;
     }
 
+    auto q_result = session.set_equalizer_band_q(0, 2.6f);
+    if (!q_result) {
+        print_error("set_equalizer_band_q", q_result.error());
+        return 1;
+    }
+
     auto remove_result = session.remove_equalizer_band(1);
     if (!remove_result) {
         print_error("remove_equalizer_band", remove_result.error());
         return 1;
+    }
+
+    const std::array<float, 7> ui_frequencies_hz{
+        31.5f, 63.0f, 125.0f, 500.0f, 1000.0f, 4000.0f, 12000.0f};
+    auto curve_result = sonotide::sample_equalizer_response(
+        session.equalizer_state(),
+        48000.0f,
+        ui_frequencies_hz);
+    if (!curve_result) {
+        print_error("sample_equalizer_response", curve_result.error());
+        return 1;
+    }
+
+    for (const auto& point : curve_result.value().points) {
+        std::cout << "curve " << point.frequency_hz
+                  << "Hz -> " << point.response_db
+                  << "dB\n";
     }
 
     print_bands(session.equalizer_state());
@@ -177,7 +216,20 @@ That is useful when:
 - you still want frequencies distributed like the framework's built-in EQ model;
 - you want presets to project cleanly onto your custom layout later.
 
-### 4. `apply_equalizer_state(...)` is the cleanest way to replace the whole layout
+### 4. `q_value` lets the UI control width, not only height
+
+The example changes `q_value` both in the initial snapshot and later through `set_equalizer_band_q(...)`.
+
+That matters for FL-style or parametric editors because two bands with the same:
+
+- center frequency;
+- gain;
+
+can still sound very different if one is broad and the other is narrow.
+
+`supported_equalizer_q_limits()` tells the UI what range is safe, while `default_equalizer_q_value` keeps the default layout compatible with Sonotide's historical sound.
+
+### 5. `apply_equalizer_state(...)` is the cleanest way to replace the whole layout
 
 The example edits `state.bands` directly and then applies the full snapshot in one call.
 
@@ -189,7 +241,7 @@ That is the right pattern when:
 
 Sonotide normalizes that state, clamps gains, sorts the layout by frequency, and recalculates the derived metadata.
 
-### 5. `equalizer_band_frequency_range(...)` is what makes horizontal dragging safe
+### 6. `equalizer_band_frequency_range(...)` is what makes horizontal dragging safe
 
 The most important call for a FL-style editor is:
 
@@ -205,7 +257,29 @@ That range already accounts for:
 
 The UI should use that range when the user drags a handle left or right. Then `set_equalizer_band_frequency(...)` becomes a simple state update instead of a guess.
 
-### 6. Add, tweak, and remove bands with session-level helpers
+### 7. `sample_equalizer_response(...)` is how the UI gets the exact curve
+
+After editing the state, the example calls:
+
+```cpp
+auto curve_result = sonotide::sample_equalizer_response(
+    session.equalizer_state(),
+    48000.0f,
+    ui_frequencies_hz);
+```
+
+This is the recommended offline or editor workflow when you already know the sample rate you want to model.
+
+The returned points already include:
+
+- the real biquad response of every band;
+- the current `q_value` of every band;
+- `headroom_compensation_db`;
+- `output_gain_db`.
+
+That means the frontend does not need to approximate the curve with its own formulas anymore.
+
+### 8. Add, tweak, and remove bands with session-level helpers
 
 After the initial snapshot is applied, the example demonstrates the runtime editing calls:
 
@@ -215,7 +289,7 @@ After the initial snapshot is applied, the example demonstrates the runtime edit
 
 Those helpers are convenient for incremental UI edits because you do not need to rebuild a full `equalizer_state` for every small gesture.
 
-### 7. `equalizer_state()` is your single source of truth after every edit
+### 9. `equalizer_state()` is your single source of truth after every edit
 
 The last call prints `session.equalizer_state()`.
 

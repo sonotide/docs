@@ -1,6 +1,6 @@
 ---
 title: "Встроенный эквалайзер"
-description: "Тонкая настройка звука с помощью встроенного эквалайзера Sonotide с числом полос до 10."
+description: "Тонкая настройка звука с помощью встроенного эквалайзера Sonotide с числом полос до 10, per-band Q и точной выборкой кривой."
 ---
 
 При использовании высокоуровневой `playback_session` Sonotide предоставляет полностью интегрированный эквалайзер с динамической раскладкой полос. Вы можете оставить привычную дефолтную схему на 10 полос, сократить её до меньшего числа полос или построить свой layout с максимумом в 10 перемещаемых полос.
@@ -33,6 +33,9 @@ session.set_equalizer_band_gain(0, 3.5f);
 // Сдвигаем эту полосу по частоте
 session.set_equalizer_band_frequency(0, 72.0f);
 
+// Делаем её уже или шире через добротность
+session.set_equalizer_band_q(0, 2.2f);
+
 // Добавляем новую полосу в low-mid область
 session.add_equalizer_band(450.0f, 1.5f);
 
@@ -44,13 +47,14 @@ session.remove_equalizer_band(2);
   Агрессивное поднятие полос выше `+0dB` неизбежно вызывает цифровой клиппинг (хруст). Если вы сильно выкручиваете определенные частоты вверх, обязательно компенсируйте это снижением общего `output_gain_db`.
 </Warning>
 
-## 3. Ограничения и дефолтные раскладки
+## 3. Ограничения, Q-диапазон и дефолтные раскладки
 
 EQ теперь динамический, но не бесконечный. Sonotide отдаёт ограничения явно, чтобы ваш UI не гадал:
 
 ```cpp
 const auto count_limits = sonotide::supported_equalizer_band_count_limits();
 const auto frequency_limits = sonotide::supported_equalizer_frequency_limits();
+const auto q_limits = sonotide::supported_equalizer_q_limits();
 
 auto state = session.equalizer_state();
 if (state.bands.size() < count_limits.max_band_count) {
@@ -61,9 +65,11 @@ const auto range = session.equalizer_band_frequency_range(0);
 if (range.has_value()) {
     session.set_equalizer_band_frequency(0, range->min_frequency_hz);
 }
+
+session.set_equalizer_band_q(0, q_limits.max_q_value);
 ```
 
-Если нужна готовая раскладка, соберите её через `make_default_equalizer_bands(...)` и примените как полный `equalizer_state`.
+Если нужна готовая раскладка, соберите её через `make_default_equalizer_bands(...)` и примените как полный `equalizer_state`. Каждая такая полоса стартует с `default_equalizer_q_value`, то есть со старой исторической шириной bell-фильтра Sonotide.
 
 ## 4. Чтение состояния для интерфейса (UI)
 
@@ -80,7 +86,36 @@ if (range.has_value()) {
 
 `last_nonflat_band_gains_db` удобен, если в интерфейсе нужна кнопка “вернуться к последней настроенной кривой” после временного flat-состояния.
 
-## 5. Полный walkthrough
+## 5. Точная кривая для UI
+
+Если ваш интерфейс рисует EQ-кривую, теперь не нужно повторно реализовывать фильтры Sonotide на фронте. Попросите библиотеку вернуть уже готовые точки:
+
+```cpp
+const std::array<float, 7> ui_frequencies_hz{
+    31.5f, 63.0f, 125.0f, 500.0f, 1000.0f, 4000.0f, 12000.0f};
+
+auto curve_result = session.sample_equalizer_response(ui_frequencies_hz);
+if (!curve_result) {
+    // Если playback ещё не согласовал формат, используйте free helper
+    // и явно передайте sample rate для offline/editor сценария.
+    auto state = session.equalizer_state();
+    auto offline_curve_result = sonotide::sample_equalizer_response(
+        state,
+        48000.0f,
+        ui_frequencies_hz);
+}
+```
+
+`equalizer_response_curve` уже включает в себя:
+
+- точный biquad-отклик всех активных полос;
+- текущий `q_value` каждой полосы;
+- `headroom_compensation_db`;
+- `output_gain_db`.
+
+То есть Sonotide становится единственным источником правды, а UI остаётся только перевести `frequency_hz` в X и `response_db` в Y.
+
+## 6. Полный walkthrough
 
 Полный пример с динамическим layout-ом, добавлением полос и перемещением band-ов по частоте смотри в [Динамическом эквалайзере](/ru/examples/dynamic-equalizer).
 

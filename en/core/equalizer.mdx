@@ -1,6 +1,6 @@
 ---
 title: "Built-in Equalizer"
-description: "Leverage Sonotide's built-in equalizer with up to 10 movable bands to fine-tune playback audio."
+description: "Leverage Sonotide's built-in equalizer with up to 10 movable bands, per-band Q control, and exact response-curve sampling."
 ---
 
 When using the `playback_session`, Sonotide provides a fully integrated equalizer with a dynamic band layout. You can keep the familiar default 10-band setup, reduce it to fewer bands, or build your own layout with up to 10 movable bands.
@@ -33,6 +33,9 @@ session.set_equalizer_band_gain(0, 3.5f);
 // Move that same band to a different center frequency
 session.set_equalizer_band_frequency(0, 72.0f);
 
+// Change how narrow or wide the bell is
+session.set_equalizer_band_q(0, 2.2f);
+
 // Add a new band if you need a denser shape in the low mids
 session.add_equalizer_band(450.0f, 1.5f);
 
@@ -44,13 +47,14 @@ session.remove_equalizer_band(2);
   Pushing bands aggressively above `+0dB` can cause digital clipping. If you drastically boost certain frequencies, be sure to lower the `output_gain_db` to compensate.
 </Warning>
 
-## 3. Band Limits and Default Layouts
+## 3. Band Limits, Q Limits, and Default Layouts
 
 The EQ is dynamic, but it is not unbounded. Sonotide exposes the limits explicitly so your UI can stay honest:
 
 ```cpp
 const auto count_limits = sonotide::supported_equalizer_band_count_limits();
 const auto frequency_limits = sonotide::supported_equalizer_frequency_limits();
+const auto q_limits = sonotide::supported_equalizer_q_limits();
 
 auto state = session.equalizer_state();
 if (state.bands.size() < count_limits.max_band_count) {
@@ -61,9 +65,11 @@ const auto range = session.equalizer_band_frequency_range(0);
 if (range.has_value()) {
     session.set_equalizer_band_frequency(0, range->min_frequency_hz);
 }
+
+session.set_equalizer_band_q(0, q_limits.max_q_value);
 ```
 
-If you want a ready-made layout, build one with `make_default_equalizer_bands(...)` and apply it through a full `equalizer_state`.
+If you want a ready-made layout, build one with `make_default_equalizer_bands(...)` and apply it through a full `equalizer_state`. Every default band starts with `default_equalizer_q_value`, which matches Sonotide's historical built-in bell width.
 
 ## 4. Reading the Equalizer State
 
@@ -80,7 +86,36 @@ You can take a snapshot of the current EQ settings via `session.equalizer_state(
 
 The `last_nonflat_band_gains_db` snapshot is also useful if your UI needs a “return to the last shaped curve” action after the user temporarily toggles a flat state.
 
-## 5. Full Walkthrough
+## 5. Sampling the Exact Response Curve
+
+If your UI draws an EQ curve, you no longer need to reimplement Sonotide's filter math on the frontend. Ask the framework for sampled response points instead:
+
+```cpp
+const std::array<float, 7> ui_frequencies_hz{
+    31.5f, 63.0f, 125.0f, 500.0f, 1000.0f, 4000.0f, 12000.0f};
+
+auto curve_result = session.sample_equalizer_response(ui_frequencies_hz);
+if (!curve_result) {
+    // If playback has not negotiated a format yet, call the free helper instead
+    // and provide an explicit sample rate for your offline/editor scenario.
+    auto state = session.equalizer_state();
+    auto offline_curve_result = sonotide::sample_equalizer_response(
+        state,
+        48000.0f,
+        ui_frequencies_hz);
+}
+```
+
+This returns `equalizer_response_curve`, which already includes:
+
+- the exact biquad response of every active band;
+- the current per-band `q_value`;
+- `headroom_compensation_db`;
+- `output_gain_db`.
+
+That makes Sonotide the single source of truth. The UI only needs to map `frequency_hz` to X and `response_db` to Y.
+
+## 6. Full Walkthrough
 
 For a complete dynamic example with custom layouts, movable bands, and runtime-safe constraints, see [Dynamic equalizer](/en/examples/dynamic-equalizer).
 
