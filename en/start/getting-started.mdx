@@ -1,9 +1,11 @@
 ---
 title: "Quickstart"
-description: "Build Sonotide using the MSVC preset, run the samples, and verify everything is working in just a few minutes."
+description: "Choose between building Sonotide from source or consuming the installed SDK, then verify the setup quickly."
 ---
 
-Welcome to Sonotide! This guide will walk you through compiling the framework and running your first audio examples to ensure your environment is set up correctly.
+Welcome to Sonotide. This guide helps you choose the right starting path:
+develop the framework from source, or consume an installed SDK from your own
+project.
 
 <Note>
   Sonotide relies on C++20 features, so you'll need an up-to-date compiler. We recommend MSVC.
@@ -16,6 +18,18 @@ Before starting, make sure you have the following installed:
 - **Visual Studio 2022** (or newer) with the Desktop development with C++ workload
 - **CMake** (either from Visual Studio or globally available in your `PATH`)
 
+## Choose your starting path
+
+- **You want to work on Sonotide itself**: build the repository from source with
+  the `msvc-x64-debug` preset and use the examples and tests from the build tree.
+- **You want to use Sonotide in your own project**: either create an install
+  tree with `cmake --install` or download a ready-made SDK from the
+  [GitHub Releases page](https://github.com/sonotide/sonotide/releases), then
+  point `CMAKE_PREFIX_PATH` at that install root.
+
+For the full installed-package flow, including `find_package(Sonotide CONFIG REQUIRED)`,
+see [Build details](/en/start/build).
+
 <Steps>
   <Step title="Configure the build environment">
     First, generate the CMake cache using the pre-configured `msvc-x64-debug` preset. This preset guarantees all tests and examples are properly wired up.
@@ -24,7 +38,7 @@ Before starting, make sure you have the following installed:
     cmake --preset msvc-x64-debug
     ```
     
-    <Info>If `cmake` isn't in your PATH, you can use the full path to the Visual Studio CMake binary.</Info>
+    <Info>If `cmake` is not in `PATH`, run the CMake binary from your installed toolchain instead.</Info>
   </Step>
 
   <Step title="Build the framework">

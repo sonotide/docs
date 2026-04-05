@@ -1,53 +1,129 @@
 ---
 title: "Build Details"
-description: "In-depth look at the Windows build workflow for Sonotide using presets and Visual Studio."
+description: "How to build and install Sonotide yourself, or consume the SDK from GitHub Releases."
 ---
 
-Sonotide simplifies compilation by centralizing the setup inside CMake presets. This approach guarantees consistency whether you're building directly from the command line, Visual Studio, or a CI environment.
+Sonotide uses CMake presets to keep local builds, CI, and installable package
+output consistent. You can approach the framework in two different ways:
 
-## The Recommended Workflow
+- build the framework from source and install it yourself;
+- download a prebuilt SDK archive from the [GitHub Releases page](https://github.com/sonotide/sonotide/releases).
 
-Sonotide is optimized for the `msvc-x64-debug` preset. 
+If you are working on Sonotide itself, use the source build flow. If you only
+want to consume the framework from your own project, the installed SDK flow is
+usually the simpler option.
 
-<CodeGroup>
-```bash With standard PATH
-# If cmake is available everywhere:
+## Build from source for framework development
+
+For day-to-day work on the framework, use the `msvc-x64-debug` preset:
+
+```bash
 cmake --preset msvc-x64-debug
 cmake --build --preset msvc-x64-debug
 ctest --preset msvc-x64-debug
 ```
 
-```bat Using VS Command Prompt
-# Alternatively, use the full path to the Visual Studio native binary:
-"C:\Program Files\Microsoft Visual Studio\18\Professional\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --preset msvc-x64-debug
-"C:\Program Files\Microsoft Visual Studio\18\Professional\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build --preset msvc-x64-debug
-```
+For a release-like local validation run, use the matching release preset:
 
-```bash From WSL integration
-# Building Windows binaries straight from WSL logic:
-"/mnt/c/Program Files/Microsoft Visual Studio/18/Professional/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake\bin\cmake.exe" --preset msvc-x64-debug
-"/mnt/c/Program Files/Microsoft Visual Studio/18/Professional/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake\bin\cmake.exe" --build --preset msvc-x64-debug
+```bash
+cmake --preset msvc-x64-release
+cmake --build --preset msvc-x64-release
+ctest --preset msvc-x64-release
 ```
-</CodeGroup>
 
 <Info>
   **Why do presets matter?**  
   The preset binds the generator, the multi-config build tree, and the test configurations together. This entirely avoids the classic issue where CMake generates a build tree, but CTest has no idea which configuration (`Debug` vs `Release`) it's supposed to execute.
 </Info>
 
-## Manual CTest Execution
+If `cmake` is not already available in `PATH`, use the CMake binary provided by
+your Visual Studio or local toolchain installation. The command shape stays the
+same; only the executable path changes.
 
-If you prefer navigating to the directory and invoking `ctest` directly without presets, you must specify the build tree and explicitly select the configuration type:
+## Build and install your own SDK
+
+If you want an installable SDK tree for another project, build and install the
+release preset:
+
+```bash
+cmake --preset msvc-x64-release
+cmake --build --preset msvc-x64-release
+cmake --install build/msvc-x64-release --config Release
+```
+
+This produces an install tree inside:
+
+```text
+build/msvc-x64-release/install
+```
+
+That directory contains the public headers, the static library, and the CMake
+package files needed by `find_package(Sonotide CONFIG REQUIRED)`.
+
+## Download a prebuilt SDK from Releases
+
+If you do not need to build the framework yourself, download the latest release
+asset from the [GitHub Releases page](https://github.com/sonotide/sonotide/releases).
+
+The release workflow publishes assets like:
+
+```text
+sonotide-0.1.0-windows-msvc-x64-release.zip
+sonotide-0.1.0-windows-msvc-x64-release.zip.sha256
+```
+
+After extracting the archive, you will have an install tree that is equivalent
+to the one produced by `cmake --install`.
+
+## Consume the installed SDK from your own CMake project
+
+The installed-package flow is the same whether the SDK came from your own
+`cmake --install` output or from a GitHub Release archive.
+
+Assume the SDK is available in one of these locations:
+
+```text
+C:\sdk\sonotide-0.1.0
+build/msvc-x64-release/install
+```
+
+Then point `CMAKE_PREFIX_PATH` at that install root when configuring your
+application:
+
+```bash
+cmake -S . -B build -DCMAKE_PREFIX_PATH="C:/sdk/sonotide-0.1.0"
+```
+
+And link Sonotide through the exported package target:
+
+```cmake
+cmake_minimum_required(VERSION 3.24)
+project(MyApp LANGUAGES CXX)
+
+find_package(Sonotide CONFIG REQUIRED)
+
+add_executable(my_app main.cpp)
+target_link_libraries(my_app PRIVATE Sonotide::sonotide)
+```
+
+You do not need to add Sonotide's include directories or Windows system
+libraries manually. The installed CMake package carries those usage
+requirements for you.
+
+## Manual CTest execution
+
+If you prefer invoking `ctest` directly without presets, pass the build tree
+and the configuration explicitly:
 
 ```bash
 ctest --test-dir build/msvc-x64-debug -C Debug
 ```
 
-## Troubleshooting Checklist
+## Troubleshooting checklist
 
-If you encounter issues during the build process, verify the following:
+If the flow does not work as expected, check the following:
 
-- Run `cmake --version` to ensure your toolchain is recognized.
-- Run `where cmake` (Windows CMD) or `which cmake` (WSL/Bash) to confirm the executable path.
-- Check `git status --short` to ensure you don't have dangling or conflicting modified files.
-- Always try running one of the built examples directly, like `build\msvc-x64-debug\examples\Debug\sonotide_list_devices.exe`, to verify runtime dependencies.
+- run `cmake --version` to confirm your toolchain is visible;
+- run `where cmake` (Windows CMD) or `which cmake` (WSL/Bash) to see which executable is being used;
+- verify that `CMAKE_PREFIX_PATH` points to the install root that contains `lib/cmake/Sonotide`;
+- run one of the sample binaries, such as `build\msvc-x64-debug\examples\Debug\sonotide_list_devices.exe`, to confirm the runtime path is working.
